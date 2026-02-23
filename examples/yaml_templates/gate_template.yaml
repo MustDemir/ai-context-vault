@@ -1,0 +1,17 @@
+id: "GTECH-002"
+title: "Pre-Deployment Bias Check"
+dimension: "technical"           # strategic | technical | compliance
+phase: "eval"                    # data | model | eval | deploy | prod | retire
+trigger: "Model passes benchmark thresholds"
+criteria: >
+  - Bias-Score < 0.05 across protected attributes
+  - Fairness metrics (demographic parity, equalized odds) within bounds
+  - Red teaming completed with no critical findings
+evidence:
+  - "Bias evaluation report"
+  - "Red team findings document"
+  - "Fairness metrics dashboard screenshot"
+decision: "Go/NoGo"
+owner: "ML Engineer + Ethics Lead"
+status: "draft"
+created: "2026-02-23"

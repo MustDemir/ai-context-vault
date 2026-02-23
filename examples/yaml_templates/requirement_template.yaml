@@ -1,0 +1,11 @@
+id: "R001"
+title: "Auditierbare Evidenzkette über den gesamten GenAI-Lifecycle"
+description: >
+  Alle Entscheidungen, Artefakte und Gate-Ergebnisse müssen
+  in einer auditierbaren Evidenzkette nachvollziehbar sein.
+source: "EU AI Act Art. 11, 12"
+category: "regulatory"           # technical | organizational | regulatory
+priority: "must"                 # must | should | could
+status: "draft"                  # draft | review | approved
+chapter: "04"
+created: "2026-02-23"

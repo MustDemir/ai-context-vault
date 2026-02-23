@@ -1,0 +1,14 @@
+# Chapter tracking – used by resume.py to generate context
+title: "Anforderungsanalyse (RQ1)"
+chapter: "04"
+status: "in_progress"            # not_started | in_progress | review | done
+progress_pct: 35
+last_updated: "2026-02-23"
+key_decisions:
+  - "DSR-based requirement derivation from literature"
+  - "3-dimensional Quality Gate framework"
+open_questions:
+  - "Granularity of compliance gates per EU AI Act article"
+artifacts_count:
+  requirements: 6
+  gates: 3
