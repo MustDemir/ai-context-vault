@@ -1,8 +1,8 @@
 # 🏦 AI Context Vault
 
-**Store, sync & resume AI context across models – save 98% tokens.**
+**Say "save" → AI auto-classifies, routes & stores. Resume any session with 600 tokens.**
 
-> Never lose your AI work again. Keep your research artifacts in Azure Cloud, query them with RAG, and resume any AI session with a single command.
+> Never lose your AI work again. Store artifacts in Azure Cloud, work seamlessly across AI models, and pick up exactly where you left off.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-green.svg)](https://python.org)
@@ -12,7 +12,30 @@
 
 ## The Problem
 
-Every AI chat session starts from scratch. Context is lost, tokens are wasted, and you repeat yourself endlessly:
+Working on complex AI projects across multiple sessions is broken in **3 critical ways**:
+
+### PD1: 🔒 AI Model Lock-in
+
+Every new session starts from zero. Your context only exists in one chat window — tied to one model:
+
+```
+Claude session 1:   "Let me explain my entire project..."    [context lost]
+ChatGPT session 2:  "Let me explain my entire project..."    [context lost]
+Gemini session 3:   "Let me explain my entire project..."    [context lost]
+```
+
+Switching AI models means starting over completely. There is no shared memory across models or sessions.
+
+### PD2: 👁️ Invisible Progress
+
+You've made dozens of decisions, drafted requirements, defined quality gates — all buried in chat history.
+No structured overview of:
+- What requirements exist and their approval status
+- Which quality gates passed or failed
+- What decisions were made, and when
+- Where you actually are in the project lifecycle
+
+### PD3: 💸 Token Waste
 
 ```
 Session 1: "Here's my project... [30,000 tokens of context]"
@@ -20,19 +43,53 @@ Session 2: "Here's my project again... [30,000 tokens of context]"
 Session 3: "Here's my project AGAIN... [30,000 tokens of context]"
 ```
 
-**90,000 tokens wasted** just to get back to where you were.
+**90,000 tokens wasted** just to restore where you were.
+
+---
 
 ## The Solution
 
-AI Context Vault stores your work artifacts in **Azure Cloud** and generates **token-optimized context** that works with **any AI model**:
+AI Context Vault solves all three problems:
+
+| Problem | Solution |
+|---|---|
+| 🔒 AI Lock-in | Artifacts in Azure Cloud → work with Claude, ChatGPT, Gemini, or any LLM |
+| 👁️ Invisible Progress | Structured YAML + chapter tracking → instant project overview |
+| 💸 Token Waste | `resume.py` compresses 30,000 → ~600 tokens. **98% savings.** |
 
 ```
-Session 1: "Here's my project... [30,000 tokens]" → artifacts saved to Azure
-Session 2: python3 resume.py → [600 tokens] ✅ Full context restored
-Session 3: python3 resume.py → [600 tokens] ✅ Full context restored
+PD1 → Azure Cloud as shared memory layer across all AI models
+PD2 → YAML artifacts + resume.py = always know exactly where you are
+PD3 → 30,000 tokens → 600 tokens per session
 ```
 
-**98% token savings.** Works with Claude, ChatGPT, Gemini, or any LLM.
+---
+
+## ✨ One-Word Save
+
+The killer feature: just say **"speichern"** (or **"save"**) in your AI chat.
+Claude automatically understands the context and handles everything:
+
+```mermaid
+flowchart LR
+    U["👤 User says\n'speichern'"]
+    A["🤖 Claude AI\nUnderstands context"]
+    F["📁 Routes to\ncorrect folder"]
+    Y["📄 Generates\nYAML summary"]
+    P["📊 Updates\nprogress tracking"]
+    C["☁️ Azure\nCloud Sync"]
+
+    U --> A --> F --> Y --> P --> C
+```
+
+What happens automatically:
+1. **Context detection** – chapter, topic, artifact type detected from the conversation
+2. **Smart routing** – `04_anforderungsanalyse/requirements/` or `gates/` or wherever it belongs
+3. **Structured YAML** – not a raw chat dump, but a resume-ready artifact with ID, status, source
+4. **Progress update** – `chapter_state.yaml` gets updated `progress_pct` and `artifacts_count`
+5. **Azure sync** – instantly searchable across sessions and models via `search.py`
+
+> No manual commands. No file paths. No configuration. Just say the word.
 
 ---
 
@@ -57,7 +114,7 @@ flowchart TB
         S1["resume.py\n📋 Generate context\n~600 tokens"]
         S2["reindex.py\n☁️ Sync to Azure\n$0 cost"]
         S3["search.py\n🔍 RAG Query\nAzure + Claude"]
-        S4["extract_yamls.py\n🤖 AI extraction\nChat → YAML"]
+        S4["extract_yamls.py\n🧠 One-Word Save\nAuto-classify & store"]
     end
 
     CHAT -->|"Work in AI session"| GIT
@@ -65,7 +122,8 @@ flowchart TB
     BLOB -->|"auto-index"| SEARCH
     SEARCH -->|"search.py"| CHAT
     GIT -->|"resume.py"| CHAT
-    CHAT -->|"extract_yamls.py"| GIT
+    CHAT -->|"'speichern'"| S4
+    S4 -->|"YAML artifacts"| GIT
 
     style LOCAL fill:#f8f9fc,stroke:#1a2744,stroke-width:2px
     style AZURE fill:#e8f4fd,stroke:#0078D4,stroke-width:2px
@@ -91,11 +149,12 @@ sequenceDiagram
     User->>AI: Discuss, iterate, create
     AI-->>User: Answers, artifacts, decisions
 
-    Note over User,Azure: 💾 SAVE PROGRESS
-    User->>Scripts: python3 extract_yamls.py --input chat.txt
-    Scripts->>AI: Claude extracts structured YAML
-    AI-->>Scripts: Requirements, Gates as YAML
-    Scripts->>Scripts: Save to Git repo
+    Note over User,Azure: 💾 ONE-WORD SAVE
+    User->>AI: "speichern" / "save"
+    AI->>AI: Detect chapter, topic & artifact type
+    AI->>Scripts: Auto-call extract_yamls.py with correct params
+    Scripts->>Scripts: Generate YAML → correct project folder
+    Scripts-->>User: ✅ Saved to 04_anforderungsanalyse/R007.yaml
 
     Note over User,Azure: ☁️ SYNC TO CLOUD
     User->>Scripts: python3 reindex.py
@@ -150,6 +209,10 @@ python3 scripts/create_index.py
 ### 3. Daily Workflow
 
 ```bash
+# ✨ ONE-WORD SAVE (the smart way)
+# Just say "speichern" or "save" in your AI chat
+# → AI detects context, routes to correct folder, generates YAML, updates progress
+
 # 📋 Resume a previous session (copies to clipboard)
 python3 scripts/resume.py
 
@@ -162,7 +225,7 @@ python3 scripts/reindex.py
 # 🔍 Search your knowledge base
 python3 scripts/search.py "what are the compliance requirements?"
 
-# 🤖 Extract artifacts from a chat transcript
+# 🤖 Manual artifact extraction (fallback)
 python3 scripts/extract_yamls.py --input chat.txt --type requirements
 python3 scripts/extract_yamls.py --input chat.txt --type gates
 ```
@@ -189,7 +252,7 @@ ai-context-vault/
 │   ├── resume.py           # 📋 Generate token-optimized context
 │   ├── reindex.py          # ☁️ Sync to Azure (Blob + Search)
 │   ├── search.py           # 🔍 RAG query (Azure + Claude)
-│   ├── extract_yamls.py    # 🤖 AI-powered artifact extraction
+│   ├── extract_yamls.py    # 🧠 One-Word Save / AI artifact extraction
 │   └── create_index.py     # 🏗️ Azure Search index setup
 ├── examples/
 │   └── yaml_templates/     # Example YAML templates
@@ -256,18 +319,19 @@ Pipeline:
 Token cost: ~$0.01-0.05 per query
 ```
 
-### `extract_yamls.py` – AI Artifact Extractor 🤖
+### `extract_yamls.py` – Intelligent Save Engine 🧠
 
 ```
-Input:  Chat transcript (.txt)
-Output: Structured YAML files (Requirements / Gates)
+Primary:  Say "speichern" in chat → fully automatic
+Fallback: python3 scripts/extract_yamls.py --input chat.txt
 
 Pipeline:
-1. Read chat transcript       → unstructured text
+1. Detect context             → chapter, topic, artifact type
 2. Check existing IDs         → prevent duplicates
-3. Claude API extraction      → structured JSON
-4. Parse + save as YAML       → R###.yaml / G###.yaml
-5. Git-ready artifacts        → commit & reindex
+3. Claude API extraction      → structured JSON from conversation
+4. Parse + save as YAML       → correct project folder
+5. Update chapter_state.yaml  → progress_pct, artifacts_count
+6. Git-ready artifacts        → commit & reindex
 
 Token cost: ~$0.05-0.20 per extraction
 ```
@@ -310,7 +374,7 @@ AI Context Vault is **model-agnostic**. The `resume.py` output works with:
 │                                                   │
 │  📁 Git repo ──→ resume.py ──→ 📋 Clipboard      │
 │       ↑                            ↓              │
-│  extract_yamls.py ←── 💬 AI Chat Session          │
+│  "speichern" ←── 💬 AI Chat Session               │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -318,7 +382,8 @@ AI Context Vault is **model-agnostic**. The `resume.py` output works with:
 
 ## 💡 Use Cases
 
-- **📚 Thesis / Research Management** – Track requirements, literature, progress
+- **🗣️ One-Word Save** – Say "save" → AI routes, classifies, generates YAML, syncs to Azure
+- **📚 Thesis / Research Management** – Track requirements, literature, progress across sessions
 - **🏢 Enterprise AI Projects** – Maintain context across teams and AI models
 - **⚖️ Compliance Documentation** – EU AI Act artifacts with audit trail
 - **🔬 Any Long-Running AI Project** – Never lose context again
@@ -341,4 +406,4 @@ MIT License – see [LICENSE](LICENSE)
 
 ---
 
-*Built with Azure AI Search, Claude API, and Python. Designed to solve the #1 pain point of working with AI: losing context between sessions.*
+*Built with Azure AI Search, Claude API, and Python. Designed to solve the #1 pain point of working with AI: losing context between sessions. Just say 'save' — the AI handles the rest.*
