@@ -66,8 +66,10 @@ def load_dotenv(path: Path | None = None) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and (key not in os.environ or not os.environ[key]):
-            os.environ[key] = value
+        if key and value:
+            # .env values always win over empty/missing env vars
+            if key not in os.environ or not os.environ[key]:
+                os.environ[key] = value
 
 
 def _tls_context() -> ssl.SSLContext | None:
@@ -248,13 +250,25 @@ def summarize_with_claude(text: str, max_bullets: int = 8) -> tuple[list[str], l
         {"role": "system", "content": "You write compact and precise engineering notes. Always respond with raw JSON only."},
         {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
     ]
-    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "300")))
+    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "600")))
     # Strip markdown fences if present
     content = content.strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\s*", "", content)
         content = re.sub(r"\s*```$", "", content)
-    parsed = json.loads(content)
+    # Repair truncated JSON: close open strings/arrays/objects
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        repaired = content.rstrip().rstrip(",")
+        for ch in ['"', "]", "}"]:
+            try:
+                parsed = json.loads(repaired)
+                break
+            except json.JSONDecodeError:
+                repaired += ch
+        else:
+            parsed = json.loads(repaired)
 
     bullets = parsed.get("summary_bullets", []) or []
     decisions = parsed.get("decisions", []) or []
