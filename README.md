@@ -11,6 +11,14 @@
 
 ---
 
+## What I Built (Portfolio Snapshot)
+
+- Engineered an AI workflow that turns long chats into compact, structured YAML artifacts.
+- Implemented one-command session persistence with auto-routing (`save.py`) and resumable context (`resume.py`).
+- Added cloud synchronization and retrieval (`reindex.py`, AI Search, Blob Storage) for cross-session continuity.
+- Integrated robust fallback summarization paths (Claude -> Azure OpenAI -> local rules).
+- Productionized multi-repo isolation with dedicated Blob containers to prevent cross-project context mixing.
+
 ## The Problem I Faced
 
 Working on complex AI projects across multiple models and sessions, I discovered **3 concrete problems** that modern AI platforms don't solve:
