@@ -70,6 +70,27 @@ def load_dotenv(path: Path | None = None) -> None:
             os.environ[key] = value
 
 
+def _tls_context() -> ssl.SSLContext | None:
+    """Build TLS context with proper CA bundle; fallback to system defaults.
+
+    Uses secure defaults and only disables verification if explicitly requested.
+    """
+    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
+    if insecure:
+        return ssl._create_unverified_context()
+
+    explicit_ca = os.getenv("SSL_CERT_FILE", "") or os.getenv("REQUESTS_CA_BUNDLE", "")
+    if explicit_ca and Path(explicit_ca).exists():
+        return ssl.create_default_context(cafile=explicit_ca)
+
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
 def _load_yaml(path: Path) -> dict:
     if yaml is None:
         return {}
@@ -204,7 +225,8 @@ def _anthropic_chat_complete(messages: list[dict], max_tokens: int = 300) -> str
             "anthropic-version": "2023-06-01",
         },
     )
-    with request.urlopen(req, timeout=45) as resp:
+    context = _tls_context()
+    with request.urlopen(req, timeout=45, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         result = json.loads(body)
         # Extract text from Anthropic response format
@@ -290,8 +312,7 @@ def _azure_openai_chat_complete(messages: list[dict]) -> dict:
         method="POST",
         headers={"Content-Type": "application/json", "api-key": key},
     )
-    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
-    context = ssl._create_unverified_context() if insecure else None
+    context = _tls_context()
     with request.urlopen(req, timeout=45, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         return json.loads(body)
@@ -508,8 +529,7 @@ def blob_configured() -> bool:
 def _fetch_azure_index_schema(endpoint: str, key: str, index_name: str, api_version: str) -> tuple[dict, str]:
     url = f"{endpoint}/indexes/{index_name}?api-version={api_version}"
     req = request.Request(url, method="GET", headers={"api-key": key})
-    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
-    context = ssl._create_unverified_context() if insecure else None
+    context = _tls_context()
     with request.urlopen(req, timeout=30, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         schema = json.loads(body)
@@ -603,8 +623,7 @@ def push_index_to_azure(index: dict) -> tuple[bool, str]:
     )
 
     try:
-        insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
-        context = ssl._create_unverified_context() if insecure else None
+        context = _tls_context()
         with request.urlopen(req, timeout=30, context=context) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return True, f"{schema_msg}. Search index updated ({len(docs)} docs). Response: {body[:200]}"
