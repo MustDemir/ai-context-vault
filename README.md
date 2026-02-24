@@ -88,6 +88,20 @@ This is **not just "save the chat."** It's:
 - **Progress tracking** updated automatically
 - **Instantly searchable** via Azure AI Search
 
+## 🧭 Multi-Repo Production Setup
+
+This toolkit is used together with a dedicated thesis-content repository:
+
+- `ai-context-vault` -> reusable workflow toolkit (scripts + RAG workflow)
+- `genaiops-thesis` -> domain content and chapter artifacts
+
+Blob sync is separated by container to avoid cross-project data mixing:
+
+- `context-vault-summaries` -> artifacts from this toolkit repo
+- `thesis-session-summaries` -> artifacts from thesis repo
+
+This improves retrieval quality and keeps an audit trail per project.
+
 ---
 
 ## 🔄 Architecture & Workflow
