@@ -163,6 +163,99 @@ def extract_actions(text: str) -> tuple[list[str], list[str]]:
     return decisions[:6], next_steps[:8]
 
 
+def anthropic_configured() -> bool:
+    load_dotenv()
+    return bool(os.getenv("ANTHROPIC_API_KEY"))
+
+
+def _anthropic_chat_complete(messages: list[dict], max_tokens: int = 300) -> str:
+    load_dotenv()
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    model = os.getenv("ANTHROPIC_SUMMARY_MODEL", "claude-haiku-4-5-20251001")
+    temperature = float(os.getenv("ANTHROPIC_TEMPERATURE", "0.1"))
+
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY missing.")
+
+    system_msg = ""
+    anthropic_messages = []
+    for m in messages:
+        if m["role"] == "system":
+            system_msg = m["content"]
+        else:
+            anthropic_messages.append({"role": m["role"], "content": m["content"]})
+
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": anthropic_messages,
+    }
+    if system_msg:
+        payload["system"] = system_msg
+
+    req = request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    with request.urlopen(req, timeout=45) as resp:
+        body = resp.read().decode("utf-8", errors="replace")
+        result = json.loads(body)
+        # Extract text from Anthropic response format
+        content_blocks = result.get("content", [])
+        return content_blocks[0].get("text", "") if content_blocks else ""
+
+
+def summarize_with_claude(text: str, max_bullets: int = 8) -> tuple[list[str], list[str], list[str], str]:
+    max_input_chars = int(os.getenv("ANTHROPIC_MAX_INPUT_CHARS", "6000"))
+    safe_text = text[:max_input_chars]
+    prompt = (
+        "Summarize this work session in concise project notes. "
+        "Return ONLY valid JSON with keys: title (string), summary_bullets (array), "
+        "decisions (array), next_steps (array). "
+        f"Limit summary_bullets to max {max_bullets}. "
+        "Return raw JSON only, no markdown fences."
+    )
+    messages = [
+        {"role": "system", "content": "You write compact and precise engineering notes. Always respond with raw JSON only."},
+        {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
+    ]
+    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "300")))
+    # Strip markdown fences if present
+    content = content.strip()
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(r"\s*```$", "", content)
+    parsed = json.loads(content)
+
+    bullets = parsed.get("summary_bullets", []) or []
+    decisions = parsed.get("decisions", []) or []
+    next_steps = parsed.get("next_steps", []) or []
+    title = parsed.get("title", "") or ""
+
+    def _clean(items: list, limit: int) -> list[str]:
+        out: list[str] = []
+        for i in items:
+            s = str(i).strip()
+            if not s:
+                continue
+            if len(s) > 220:
+                s = s[:217].rstrip() + "..."
+            if s not in out:
+                out.append(s)
+            if len(out) >= limit:
+                break
+        return out
+
+    return _clean(bullets, max_bullets), _clean(decisions, 6), _clean(next_steps, 8), title
+
+
 def azure_openai_configured() -> bool:
     load_dotenv()
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
@@ -264,18 +357,29 @@ def save_session_summary(
         resolved_topic = "general"
 
     llm_used = False
+    engine_name = "local_rules"
     llm_error = ""
     llm_title = ""
     bullets: list[str] = []
     decisions: list[str] = []
     next_steps: list[str] = []
 
-    if use_llm and azure_openai_configured():
+    # 3-tier fallback: Claude (Anthropic) → Azure OpenAI → local rules
+    if use_llm and anthropic_configured():
+        try:
+            bullets, decisions, next_steps, llm_title = summarize_with_claude(text)
+            llm_used = True
+            engine_name = "anthropic_claude"
+        except Exception as e:
+            llm_error = f"[anthropic] {e}"
+
+    if use_llm and not llm_used and azure_openai_configured():
         try:
             bullets, decisions, next_steps, llm_title = summarize_with_azure_openai(text)
             llm_used = True
+            engine_name = "azure_openai"
         except Exception as e:
-            llm_error = str(e)
+            llm_error += f" [aoai] {e}" if llm_error else str(e)
 
     if not bullets:
         bullets = summarize_text_to_bullets(text)
@@ -300,7 +404,7 @@ def save_session_summary(
         "next_steps": next_steps,
         "tags": tags or [],
         "source": source,
-        "summary_engine": "azure_openai" if llm_used else "local_rules",
+        "summary_engine": engine_name,
     }
     if llm_error:
         payload["summary_engine_error"] = llm_error[:300]

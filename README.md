@@ -277,11 +277,11 @@ Output: Compact YAML summary routed to the right folder
 Pipeline:
 1. Detect topic             → architecture/requirements/evaluation/general
 2. Build summary bullets    → decisions + next steps
-3. Optional Azure OpenAI    → better summary quality (fallback to local rules)
+3. LLM summary (3-tier):    Claude Haiku → Azure OpenAI → local rules
 4. Save YAML artifact       → session_summaries/*
 5. Optional Blob sync       → only changed/new files
 
-Token cost: ~$0 with local rules, low with gpt-4o-mini
+Token cost: ~$0.001 with Claude Haiku, ~$0 with local rules
 ```
 
 ### `resume.py` – Compact Session Context 📋
