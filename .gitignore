@@ -31,3 +31,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local workflow cache
+.memory/
+
+# Optional local notes input
+session_notes.txt

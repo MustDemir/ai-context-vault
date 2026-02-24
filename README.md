@@ -111,7 +111,7 @@ flowchart TB
         S1["resume.py\n📋 Progress dashboard"]
         S2["reindex.py\n☁️ Sync to Azure"]
         S3["search.py\n🔍 Cross-session RAG"]
-        S4["extract_yamls.py\n🧠 Intelligent Save"]
+        S4["save.py\n🧠 Intelligent Save"]
     end
 
     CHAT -->|"Work in AI session"| GIT
@@ -120,7 +120,7 @@ flowchart TB
     SEARCH -->|"search.py"| CHAT
     GIT -->|"resume.py"| CHAT
     CHAT -->|"'speichern'"| S4
-    S4 -->|"structured artifacts"| GIT
+    S4 -->|"session summary YAML"| GIT
 
     style LOCAL fill:#f8f9fc,stroke:#1a2744,stroke-width:2px
     style AZURE fill:#e8f4fd,stroke:#0078D4,stroke-width:2px
@@ -148,10 +148,10 @@ sequenceDiagram
 
     Note over User,Azure: 💾 INTELLIGENT SAVE
     User->>AI: "speichern" / "save"
-    AI->>AI: Detect chapter, topic, type
-    AI->>Scripts: Auto-extract structured YAML
+    AI->>AI: Session decisions + next steps
+    AI->>Scripts: save.py creates compact summary YAML
     Scripts->>Scripts: Route to folder + update progress
-    Scripts-->>User: ✅ R007.yaml → 04_requirements/
+    Scripts-->>User: ✅ 2026..._session-summary.yaml saved
 
     Note over User,Azure: ☁️ SYNC TO CLOUD
     User->>Scripts: python3 reindex.py
@@ -206,14 +206,11 @@ python3 scripts/create_index.py
 
 ```bash
 # ✨ INTELLIGENT SAVE (primary)
-# Just say "speichern" or "save" in your AI chat
-# → AI detects context, routes, generates YAML, updates progress
+# 1) Put your short session notes into a file or pipe text in
+python3 scripts/save.py --input session_notes.txt --source chatgpt --topic auto
 
-# 📋 Resume a session (structured progress → clipboard)
+# 📋 Resume a session (compact context output)
 python3 scripts/resume.py
-
-# 📋 Resume specific chapter
-python3 scripts/resume.py 04
 
 # ☁️ Sync all artifacts to Azure
 python3 scripts/reindex.py
@@ -221,7 +218,7 @@ python3 scripts/reindex.py
 # 🔍 Search across ALL sessions
 python3 scripts/search.py "what are the compliance requirements?"
 
-# 🤖 Manual extraction (fallback)
+# 🧩 Legacy/manual extraction (optional fallback)
 python3 scripts/extract_yamls.py --input chat.txt --type requirements
 ```
 
@@ -246,10 +243,12 @@ Savings matter at scale — and align with RAG optimization research (Liu et al.
 ```
 ai-context-vault/
 ├── scripts/
-│   ├── resume.py           # 📋 Structured progress dashboard
-│   ├── reindex.py          # ☁️ Sync to Azure (Blob + Search)
+│   ├── save.py             # 🧠 Primary end-of-session summary save
+│   ├── workflow_lib.py     # ⚙️ Shared save/reindex/resume logic
+│   ├── resume.py           # 📋 Compact resume context
+│   ├── reindex.py          # ☁️ Sync summaries to Azure (Blob + Search)
 │   ├── search.py           # 🔍 Cross-session RAG query
-│   ├── extract_yamls.py    # 🧠 Intelligent Save engine
+│   ├── extract_yamls.py    # 🧩 Legacy/manual extraction
 │   └── create_index.py     # 🏗️ Azure Search index setup
 ├── examples/
 │   └── yaml_templates/     # Example YAML templates
@@ -269,18 +268,32 @@ ai-context-vault/
 
 ## 🔧 How Each Script Works
 
-### `resume.py` – Structured Progress Dashboard 📋
+### `save.py` – Primary Intelligent Save 🧠
 
 ```
-Input:  Your local YAML/MD artifacts
-Output: ~600 token dashboard → clipboard
+Input:  Session notes text (--input/--text/stdin)
+Output: Compact YAML summary routed to the right folder
 
 Pipeline:
-1. Parse chapter_state.yaml    → progress per chapter
-2. Parse requirement YAMLs     → status (approved/draft/open)
-3. Parse gate YAMLs            → gate completion
-4. Compile with icons          → ✅/⬜/🔄
-5. Auto-copy to clipboard      → paste into any AI
+1. Detect topic             → architecture/requirements/evaluation/general
+2. Build summary bullets    → decisions + next steps
+3. Optional Azure OpenAI    → better summary quality (fallback to local rules)
+4. Save YAML artifact       → session_summaries/*
+5. Optional Blob sync       → only changed/new files
+
+Token cost: ~$0 with local rules, low with gpt-4o-mini
+```
+
+### `resume.py` – Compact Session Context 📋
+
+```
+Input:  Session summary artifacts
+Output: Compact context block for next chat
+
+Pipeline:
+1. Read latest session summaries
+2. Build concise status snapshot
+3. Print + store in `.memory/resume_context.txt`
 
 Token cost: $0 (local parsing only)
 ```
@@ -288,15 +301,15 @@ Token cost: $0 (local parsing only)
 ### `reindex.py` – Azure Cloud Sync ☁️
 
 ```
-Input:  Local YAML/MD files
-Output: Files in Azure Blob + indexed in AI Search
+Input:  Local session summaries
+Output: Updated Blob + AI Search index
 
 Pipeline:
-1. Recursive scan for .yaml/.yml/.md
-2. Upload to Blob Storage      → versioned artifacts
-3. Create search documents     → metadata extraction
-4. Batch upsert to Search      → with retry/backoff
-5. SHA1-based IDs              → idempotent
+1. Rebuild local `.memory/index.json`
+2. Rebuild `.memory/resume_context.txt`
+3. Push summaries to AI Search (schema-aware)
+4. Blob sync with SHA-256 change detection
+5. Skip unchanged blobs to reduce operations
 
 Token cost: $0 (Azure SDK only)
 ```
@@ -319,19 +332,16 @@ vs. This: searches across ALL sessions, chapters, types
 Token cost: ~$0.01-0.05 per query
 ```
 
-### `extract_yamls.py` – Intelligent Save Engine 🧠
+### `extract_yamls.py` – Legacy Fallback 🧩
 
 ```
-Primary:  Say "speichern" in chat → automatic
-Fallback: python3 scripts/extract_yamls.py --input chat.txt
+Fallback when you need to parse older chat exports manually:
+python3 scripts/extract_yamls.py --input chat.txt
 
 Pipeline:
-1. Detect context    → chapter, topic, artifact type
-2. Check for dupes   → prevent duplicates
-3. Claude API        → conversation → structured JSON
-4. Save as YAML      → correct project folder + ID + status
-5. Update progress   → chapter_state.yaml
-6. Git-ready         → versionable, auditable, diff-able
+1. Parse long chat export
+2. Extract YAML artifacts via Claude
+3. Save to project structure
 
 Token cost: ~$0.05-0.20 per extraction
 ```
@@ -399,7 +409,7 @@ The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern*
 
 ## 💡 Use Cases
 
-- **🧠 Intelligent Save** – Say "save" → AI extracts structured YAML, routes to folder, syncs to Azure
+- **🧠 Intelligent Save** – `save.py` creates compact summary YAML, routes it, and syncs
 - **📚 Thesis Management** – Track requirements, gates, progress across chapters and sessions
 - **🏢 Multi-Model Projects** – Shared knowledge base across Claude, ChatGPT, Gemini via Azure
 - **⚖️ Compliance Documentation** – Git-versioned evidence chain (EU AI Act, ISO 42001)

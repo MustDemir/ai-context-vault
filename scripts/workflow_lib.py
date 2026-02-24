@@ -1,0 +1,634 @@
+#!/usr/bin/env python3
+"""Shared helpers for AI Context Vault workflow scripts."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import ssl
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable
+from urllib import request
+from urllib.error import HTTPError, URLError
+
+try:
+    import yaml
+except Exception:  # pragma: no cover
+    yaml = None
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MEMORY_DIR = REPO_ROOT / ".memory"
+INDEX_PATH = MEMORY_DIR / "index.json"
+RESUME_PATH = MEMORY_DIR / "resume_context.txt"
+BLOB_SYNC_STATE_PATH = MEMORY_DIR / "blob_sync_state.json"
+
+TRACKED_EXTENSIONS = {".md", ".yaml", ".yml", ".csv", ".txt"}
+EXCLUDE_DIRS = {".git", ".memory", "backups", "__pycache__", ".venv", "venv", "env"}
+SUMMARY_DIRNAME = "session_summaries"
+
+TOPIC_TO_DIR = {
+    "architecture": "docs/session_summaries",
+    "requirements": "examples/session_summaries",
+    "evaluation": "docs/session_summaries",
+    "methodology": "docs/session_summaries",
+    "general": "examples/session_summaries",
+}
+
+TOPIC_HINTS = {
+    "architecture": ["architecture", "architektur", "rq2", "gate", "quality gate"],
+    "requirements": ["requirement", "anforderung", "rq1", "must", "should"],
+    "evaluation": ["evaluation", "rq3", "interview", "coverage", "validierung"],
+    "methodology": ["method", "methodik", "dsr", "design science", "research design"],
+}
+
+
+@dataclass
+class FileEntry:
+    path: str
+    size_bytes: int
+    modified_utc: str
+    lines: int
+
+
+def load_dotenv(path: Path | None = None) -> None:
+    env_file = path or (REPO_ROOT / ".env")
+    if not env_file.exists():
+        return
+    for raw in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def _load_yaml(path: Path) -> dict:
+    if yaml is None:
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            value = yaml.safe_load(f)
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def _dump_yaml(path: Path, payload: dict) -> None:
+    if yaml is None:
+        raise RuntimeError("PyYAML missing. Install with: pip install pyyaml")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+def iter_source_files() -> Iterable[Path]:
+    for p in REPO_ROOT.rglob("*"):
+        if not p.is_file():
+            continue
+        if any(part in EXCLUDE_DIRS for part in p.parts):
+            continue
+        if p.suffix.lower() not in TRACKED_EXTENSIONS:
+            continue
+        yield p
+
+
+def _slugify(value: str) -> str:
+    value = value.lower().strip()
+    value = re.sub(r"[^a-z0-9]+", "-", value)
+    return value.strip("-") or "summary"
+
+
+def detect_topic(text: str) -> str:
+    lower = text.lower()
+    best_topic = "general"
+    best_score = 0
+    for topic, hints in TOPIC_HINTS.items():
+        score = sum(lower.count(h) for h in hints)
+        if score > best_score:
+            best_score = score
+            best_topic = topic
+    return best_topic
+
+
+def summarize_text_to_bullets(text: str, max_bullets: int = 8) -> list[str]:
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    bullets = []
+
+    for ln in lines:
+        cleaned = re.sub(r"^[-*\d.)\s]+", "", ln).strip()
+        if len(cleaned) < 18:
+            continue
+        if len(cleaned) > 220:
+            cleaned = cleaned[:217].rstrip() + "..."
+        if cleaned not in bullets:
+            bullets.append(cleaned)
+        if len(bullets) >= max_bullets:
+            break
+
+    if len(bullets) < max_bullets:
+        joined = " ".join(lines)
+        sentences = re.split(r"(?<=[.!?])\s+", joined)
+        for sent in sentences:
+            sent = sent.strip()
+            if len(sent) < 24:
+                continue
+            if len(sent) > 220:
+                sent = sent[:217].rstrip() + "..."
+            if sent not in bullets:
+                bullets.append(sent)
+            if len(bullets) >= max_bullets:
+                break
+
+    return bullets[:max_bullets]
+
+
+def extract_actions(text: str) -> tuple[list[str], list[str]]:
+    decisions: list[str] = []
+    next_steps: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip().lower()
+        if not line:
+            continue
+        if any(k in line for k in ["decision", "entscheidung", "we will", "we choose"]):
+            decisions.append(raw.strip())
+        if any(k in line for k in ["next", "todo", "next step", "offen", "naechste", "nächste"]):
+            next_steps.append(raw.strip())
+    return decisions[:6], next_steps[:8]
+
+
+def azure_openai_configured() -> bool:
+    load_dotenv()
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+    key = os.getenv("AZURE_OPENAI_API_KEY", "") or os.getenv("AZURE_OPENAI_KEY", "")
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "") or os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT", "")
+    return bool(endpoint and key and deployment)
+
+
+def _azure_openai_chat_complete(messages: list[dict]) -> dict:
+    load_dotenv()
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+    key = os.getenv("AZURE_OPENAI_API_KEY", "") or os.getenv("AZURE_OPENAI_KEY", "")
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "") or os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT", "")
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    max_tokens = int(os.getenv("AZURE_OPENAI_MAX_OUTPUT_TOKENS", "300"))
+    temperature = float(os.getenv("AZURE_OPENAI_TEMPERATURE", "0.1"))
+
+    if not endpoint or not key or not deployment:
+        raise RuntimeError("AZURE_OPENAI_* config missing.")
+
+    url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
+    payload = {
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+
+    req = request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json", "api-key": key},
+    )
+    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
+    context = ssl._create_unverified_context() if insecure else None
+    with request.urlopen(req, timeout=45, context=context) as resp:
+        body = resp.read().decode("utf-8", errors="replace")
+        return json.loads(body)
+
+
+def summarize_with_azure_openai(text: str, max_bullets: int = 8) -> tuple[list[str], list[str], list[str], str]:
+    max_input_chars = int(os.getenv("AZURE_OPENAI_MAX_INPUT_CHARS", "6000"))
+    safe_text = text[:max_input_chars]
+    prompt = (
+        "Summarize this work session in concise project notes. "
+        "Return ONLY valid JSON with keys: title (string), summary_bullets (array), "
+        "decisions (array), next_steps (array). "
+        f"Limit summary_bullets to max {max_bullets}."
+    )
+    messages = [
+        {"role": "system", "content": "You write compact and precise engineering notes."},
+        {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
+    ]
+    result = _azure_openai_chat_complete(messages)
+    content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    parsed = json.loads(content)
+
+    bullets = parsed.get("summary_bullets", []) or []
+    decisions = parsed.get("decisions", []) or []
+    next_steps = parsed.get("next_steps", []) or []
+    title = parsed.get("title", "") or ""
+
+    def _clean(items: list, limit: int) -> list[str]:
+        out: list[str] = []
+        for i in items:
+            s = str(i).strip()
+            if not s:
+                continue
+            if len(s) > 220:
+                s = s[:217].rstrip() + "..."
+            if s not in out:
+                out.append(s)
+            if len(out) >= limit:
+                break
+        return out
+
+    return _clean(bullets, max_bullets), _clean(decisions, 6), _clean(next_steps, 8), title
+
+
+def summary_output_path(topic: str, title: str | None = None) -> Path:
+    rel_dir = TOPIC_TO_DIR.get(topic, TOPIC_TO_DIR["general"])
+    target_dir = REPO_ROOT / rel_dir
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    suffix = _slugify(title or topic)
+    return target_dir / f"{ts}_{suffix}.yaml"
+
+
+def save_session_summary(
+    text: str,
+    topic: str = "auto",
+    title: str | None = None,
+    source: str = "manual",
+    tags: list[str] | None = None,
+    use_llm: bool = True,
+) -> tuple[Path, dict]:
+    resolved_topic = detect_topic(text) if topic == "auto" else topic.lower().strip()
+    if resolved_topic not in TOPIC_TO_DIR:
+        resolved_topic = "general"
+
+    llm_used = False
+    llm_error = ""
+    llm_title = ""
+    bullets: list[str] = []
+    decisions: list[str] = []
+    next_steps: list[str] = []
+
+    if use_llm and azure_openai_configured():
+        try:
+            bullets, decisions, next_steps, llm_title = summarize_with_azure_openai(text)
+            llm_used = True
+        except Exception as e:
+            llm_error = str(e)
+
+    if not bullets:
+        bullets = summarize_text_to_bullets(text)
+    if not decisions or not next_steps:
+        local_decisions, local_next = extract_actions(text)
+        if not decisions:
+            decisions = local_decisions
+        if not next_steps:
+            next_steps = local_next
+
+    path = summary_output_path(resolved_topic, title)
+    final_title = title or llm_title or "Session Summary"
+
+    payload = {
+        "id": f"SUM-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "topic": resolved_topic,
+        "target_folder": str(path.parent.relative_to(REPO_ROOT)),
+        "title": final_title,
+        "summary_bullets": bullets,
+        "decisions": decisions,
+        "next_steps": next_steps,
+        "tags": tags or [],
+        "source": source,
+        "summary_engine": "azure_openai" if llm_used else "local_rules",
+    }
+    if llm_error:
+        payload["summary_engine_error"] = llm_error[:300]
+
+    _dump_yaml(path, payload)
+    return path, payload
+
+
+def load_session_summaries(limit: int | None = None) -> list[dict]:
+    rows: list[dict] = []
+    for p in sorted(REPO_ROOT.rglob(f"{SUMMARY_DIRNAME}/*.yaml"), reverse=True):
+        doc = _load_yaml(p)
+        if not doc:
+            continue
+        doc["path"] = str(p.relative_to(REPO_ROOT))
+        rows.append(doc)
+        if limit and len(rows) >= limit:
+            break
+    return rows
+
+
+def build_index() -> dict:
+    entries = []
+    for path in sorted(iter_source_files()):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            lines = text.count("\n") + (1 if text else 0)
+            stat = path.stat()
+            entries.append(
+                FileEntry(
+                    path=str(path.relative_to(REPO_ROOT)),
+                    size_bytes=stat.st_size,
+                    modified_utc=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    lines=lines,
+                ).__dict__
+            )
+        except Exception:
+            continue
+
+    summaries = load_session_summaries(limit=None)
+
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "repo_root": str(REPO_ROOT),
+        "files": entries,
+        "session_summaries": summaries,
+    }
+
+
+def write_index(index: dict) -> Path:
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    INDEX_PATH.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    return INDEX_PATH
+
+
+def build_resume_text(index: dict) -> str:
+    lines = []
+    lines.append("Here is my current project status - use this as context:")
+    lines.append("")
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append(f"Repo: {index.get('repo_root','')}")
+    lines.append(f"Indexed artifacts: {len(index.get('files', []))}")
+    lines.append("")
+
+    lines.append("Latest session summaries:")
+    summaries = index.get("session_summaries", [])[:8]
+    if not summaries:
+        lines.append("- No session summaries available yet.")
+    else:
+        for s in summaries:
+            topic = s.get("topic", "general")
+            title = s.get("title", "Session Summary")
+            bullets = s.get("summary_bullets", [])
+            first = bullets[0] if bullets else "(no bullet)"
+            lines.append(f"- [{topic}] {title}: {first}")
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def write_resume_text(text: str) -> Path:
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    RESUME_PATH.write_text(text, encoding="utf-8")
+    return RESUME_PATH
+
+
+def azure_configured() -> bool:
+    load_dotenv()
+    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
+    key = os.getenv("AZURE_SEARCH_ADMIN_KEY") or os.getenv("AZURE_SEARCH_KEY")
+    index_name = os.getenv("AZURE_SEARCH_INDEX_NAME") or os.getenv("AZURE_SEARCH_INDEX")
+    return bool(endpoint and key and index_name)
+
+
+def blob_configured() -> bool:
+    load_dotenv()
+    account = os.getenv("AZURE_STORAGE_ACCOUNT")
+    key = os.getenv("AZURE_STORAGE_KEY")
+    return bool(account and key)
+
+
+def _fetch_azure_index_schema(endpoint: str, key: str, index_name: str, api_version: str) -> tuple[dict, str]:
+    url = f"{endpoint}/indexes/{index_name}?api-version={api_version}"
+    req = request.Request(url, method="GET", headers={"api-key": key})
+    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
+    context = ssl._create_unverified_context() if insecure else None
+    with request.urlopen(req, timeout=30, context=context) as resp:
+        body = resp.read().decode("utf-8", errors="replace")
+        schema = json.loads(body)
+        return schema, body
+
+
+def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]:
+    fields = schema.get("fields", []) if isinstance(schema, dict) else []
+    by_name = {f.get("name"): f for f in fields if isinstance(f, dict) and f.get("name")}
+    string_fields = [f.get("name") for f in fields if f.get("type") == "Edm.String" and f.get("name")]
+    key_candidates = [f.get("name") for f in fields if f.get("key") is True and f.get("name")]
+
+    configured_key = os.getenv("AZURE_SEARCH_KEY_FIELD", "")
+    if configured_key and configured_key in by_name:
+        key_field = configured_key
+    elif key_candidates:
+        key_field = key_candidates[0]
+    elif "id" in by_name:
+        key_field = "id"
+    else:
+        return [], "No key field found in search index schema."
+
+    configured_content = os.getenv("AZURE_SEARCH_CONTENT_FIELD", "")
+    content_priorities = [configured_content, "content", "text", "summary", "body", "chunk", "message"]
+    content_field = ""
+    for c in content_priorities:
+        if c and c in by_name:
+            content_field = c
+            break
+    if not content_field:
+        for sf in string_fields:
+            if sf != key_field:
+                content_field = sf
+                break
+    if not content_field:
+        return [], "No suitable content field (Edm.String) found in search index schema."
+
+    title_field = "title" if "title" in by_name else ("name" if "name" in by_name else "")
+    topic_field = "topic" if "topic" in by_name else ("category" if "category" in by_name else "")
+    source_field = "source_path" if "source_path" in by_name else ("source" if "source" in by_name else "")
+    created_field = "created_at" if "created_at" in by_name else ("timestamp" if "timestamp" in by_name else "")
+
+    docs = []
+    for s in index.get("session_summaries", []):
+        sid = s.get("id") or _slugify(s.get("path", "summary"))
+        bullets = s.get("summary_bullets", [])
+        content = "\n".join(f"- {b}" for b in bullets)
+        doc = {"@search.action": "mergeOrUpload", key_field: sid, content_field: content}
+        if title_field:
+            doc[title_field] = s.get("title", "Session Summary")
+        if topic_field:
+            doc[topic_field] = s.get("topic", "general")
+        if source_field:
+            doc[source_field] = s.get("path", "")
+        if created_field:
+            doc[created_field] = s.get("created_at", "")
+        docs.append(doc)
+
+    return docs, f"Schema detected: key={key_field}, content={content_field}"
+
+
+def push_index_to_azure(index: dict) -> tuple[bool, str]:
+    load_dotenv()
+    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").rstrip("/")
+    key = os.getenv("AZURE_SEARCH_ADMIN_KEY", "") or os.getenv("AZURE_SEARCH_KEY", "")
+    index_name = os.getenv("AZURE_SEARCH_INDEX_NAME", "") or os.getenv("AZURE_SEARCH_INDEX", "")
+    api_version = os.getenv("AZURE_SEARCH_API_VERSION", "2023-11-01")
+
+    if not endpoint or not key or not index_name:
+        return False, "Azure config missing (AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY, AZURE_SEARCH_INDEX)."
+
+    try:
+        schema, _ = _fetch_azure_index_schema(endpoint, key, index_name, api_version)
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return False, f"Azure HTTP error during schema read {e.code}: {body[:400]}"
+    except URLError as e:
+        return False, f"Azure network error during schema read: {e}"
+
+    docs, schema_msg = _summary_docs_for_azure(index, schema)
+    if not docs:
+        return True, f"{schema_msg} Nothing to upload."
+
+    url = f"{endpoint}/indexes/{index_name}/docs/index?api-version={api_version}"
+    payload = json.dumps({"value": docs}).encode("utf-8")
+    req = request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json", "api-key": key},
+    )
+
+    try:
+        insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
+        context = ssl._create_unverified_context() if insecure else None
+        with request.urlopen(req, timeout=30, context=context) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return True, f"{schema_msg}. Search index updated ({len(docs)} docs). Response: {body[:200]}"
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        return False, f"Azure HTTP error {e.code}: {body[:400]}"
+    except URLError as e:
+        return False, f"Azure network error: {e}"
+
+
+def _blob_container_name() -> str:
+    return os.getenv("AZURE_BLOB_CONTAINER", "session-summaries")
+
+
+def _list_summary_files() -> list[Path]:
+    return sorted(REPO_ROOT.rglob(f"{SUMMARY_DIRNAME}/*.yaml"))
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _load_blob_sync_state() -> dict:
+    if not BLOB_SYNC_STATE_PATH.exists():
+        return {}
+    try:
+        return json.loads(BLOB_SYNC_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_blob_sync_state(state: dict) -> None:
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    BLOB_SYNC_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def push_summaries_to_blob() -> tuple[bool, str]:
+    load_dotenv()
+    account = os.getenv("AZURE_STORAGE_ACCOUNT", "")
+    key = os.getenv("AZURE_STORAGE_KEY", "")
+    container = _blob_container_name()
+
+    if not account or not key:
+        return False, "Blob config missing (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY)."
+
+    files = _list_summary_files()
+    if not files:
+        return True, "No session summaries found, nothing to upload."
+
+    state = _load_blob_sync_state()
+    synced = state.get("synced_hashes", {}) if isinstance(state, dict) else {}
+    if not isinstance(synced, dict):
+        synced = {}
+
+    try:
+        create_cmd = [
+            "az",
+            "storage",
+            "container",
+            "create",
+            "--name",
+            container,
+            "--account-name",
+            account,
+            "--account-key",
+            key,
+            "--auth-mode",
+            "key",
+            "--output",
+            "none",
+        ]
+        subprocess.run(create_cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        return False, "Azure CLI (az) not found."
+    except subprocess.CalledProcessError as e:
+        return False, f"Container creation failed: {(e.stderr or e.stdout).strip()[:300]}"
+
+    uploaded = 0
+    skipped = 0
+    new_synced: dict[str, str] = {}
+
+    for file_path in files:
+        rel = file_path.relative_to(REPO_ROOT).as_posix()
+        file_hash = _sha256_file(file_path)
+        new_synced[rel] = file_hash
+
+        if synced.get(rel) == file_hash:
+            skipped += 1
+            continue
+
+        cmd = [
+            "az",
+            "storage",
+            "blob",
+            "upload",
+            "--container-name",
+            container,
+            "--account-name",
+            account,
+            "--account-key",
+            key,
+            "--auth-mode",
+            "key",
+            "--file",
+            str(file_path),
+            "--name",
+            rel,
+            "--overwrite",
+            "true",
+            "--output",
+            "none",
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            uploaded += 1
+        except subprocess.CalledProcessError as e:
+            return False, f"Blob upload failed ({rel}): {(e.stderr or e.stdout).strip()[:300]}"
+
+    _write_blob_sync_state(
+        {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "container": container,
+            "synced_hashes": new_synced,
+        }
+    )
+
+    return True, f"Blob sync OK: {uploaded} uploaded, {skipped} unchanged (container '{container}')."
