@@ -692,8 +692,13 @@ def push_summaries_to_blob() -> tuple[bool, str]:
         return True, "No session summaries found, nothing to upload."
 
     state = _load_blob_sync_state()
+    previous_container = state.get("container") if isinstance(state, dict) else None
     synced = state.get("synced_hashes", {}) if isinstance(state, dict) else {}
     if not isinstance(synced, dict):
+        synced = {}
+
+    # If the target container changed, force a one-time full upload to avoid cross-project cache skips.
+    if previous_container and previous_container != container:
         synced = {}
 
     try:
