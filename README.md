@@ -206,14 +206,14 @@ python3 scripts/create_index.py
 
 ```bash
 # ✨ INTELLIGENT SAVE (primary)
-# 1) Put your short session notes into a file or pipe text in
+# 1) Put SHORT session notes into a file (not full raw chat transcript)
 python3 scripts/save.py --input session_notes.txt --source chatgpt --topic auto
 
 # 📋 Resume a session (compact context output)
 python3 scripts/resume.py
 
 # ☁️ Sync all artifacts to Azure
-python3 scripts/reindex.py
+python3 scripts/reindex.py --azure
 
 # 🔍 Search across ALL sessions
 python3 scripts/search.py "what are the compliance requirements?"
@@ -271,7 +271,7 @@ ai-context-vault/
 ### `save.py` – Primary Intelligent Save 🧠
 
 ```
-Input:  Session notes text (--input/--text/stdin)
+Input:  Short session notes text (--input/--text/stdin), not full raw chat dumps
 Output: Compact YAML summary routed to the right folder
 
 Pipeline:
