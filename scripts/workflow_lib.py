@@ -250,7 +250,7 @@ def summarize_with_claude(text: str, max_bullets: int = 8) -> tuple[list[str], l
         {"role": "system", "content": "You write compact and precise engineering notes. Always respond with raw JSON only."},
         {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
     ]
-    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "600")))
+    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "2000")))
     # Strip markdown fences if present
     content = content.strip()
     if content.startswith("```"):
