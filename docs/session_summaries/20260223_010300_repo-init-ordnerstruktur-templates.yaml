@@ -7,8 +7,8 @@ summary_bullets:
 - Top-Level Ordnerstruktur nach Gliederung angelegt und Git-Repo initialisiert
 - 'Templates erstellt: requirement_template, gate_template, session_template'
 - Kapitelkarten für Kapitel 1–3 und 5–8 angelegt
-- 'Requirements R001–R005 als Skeleton erstellt'
-- 'Quality Gates GSTR-001 / GTECH-001 / GCOMP-001 als Skeleton erstellt'
+- Requirements R001–R005 als Skeleton erstellt
+- Quality Gates GSTR-001 / GTECH-001 / GCOMP-001 als Skeleton erstellt
 - Traceability Matrix Skeleton angelegt
 decisions:
 - 'Reihenfolge festgelegt: A (Zerlegung/Operationalisierung) vor B (Technik/RAG)'
@@ -29,3 +29,6 @@ tags:
 - traceability
 source: claude-ai
 summary_engine: anthropic_claude
+repo_scope: vault
+summary_type: technisch
+source_repo: ai-context-vault

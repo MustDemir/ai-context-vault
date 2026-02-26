@@ -19,3 +19,6 @@ next_steps:
 tags: []
 source: claude
 summary_engine: anthropic_claude
+repo_scope: vault
+summary_type: technisch
+source_repo: ai-context-vault

@@ -108,7 +108,14 @@ Blob sync is separated by container to avoid cross-project data mixing:
 - `context-vault-summaries` -> artifacts from this toolkit repo
 - `thesis-session-summaries` -> artifacts from thesis repo
 
-This improves retrieval quality and keeps an audit trail per project.
+Azure AI Search can intentionally stay shared across repos for cross-model continuity.
+To keep retrieval clean, each summary carries routing metadata:
+
+- `repo_scope` (`vault` or `thesis`)
+- `summary_type` (`technisch` or `fachlich`)
+- `source_repo` (`ai-context-vault` or `genaiops-thesis`)
+
+Query best practice: filter by `source_repo` first, then widen only when needed.
 
 ---
 

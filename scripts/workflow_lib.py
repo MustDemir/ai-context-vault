@@ -46,6 +46,10 @@ TOPIC_HINTS = {
     "methodology": ["method", "methodik", "dsr", "design science", "research design"],
 }
 
+DEFAULT_REPO_SCOPE = "vault"
+DEFAULT_SUMMARY_TYPE = "technisch"
+DEFAULT_SOURCE_REPO = "ai-context-vault"
+
 
 @dataclass
 class FileEntry:
@@ -379,6 +383,14 @@ def summary_output_path(topic: str, title: str | None = None) -> Path:
     return target_dir / f"{ts}_{suffix}.yaml"
 
 
+def _summary_metadata_defaults() -> tuple[str, str, str]:
+    load_dotenv()
+    repo_scope = os.getenv("SUMMARY_REPO_SCOPE", DEFAULT_REPO_SCOPE).strip() or DEFAULT_REPO_SCOPE
+    summary_type = os.getenv("SUMMARY_TYPE", DEFAULT_SUMMARY_TYPE).strip() or DEFAULT_SUMMARY_TYPE
+    source_repo = os.getenv("SUMMARY_SOURCE_REPO", DEFAULT_SOURCE_REPO).strip() or DEFAULT_SOURCE_REPO
+    return repo_scope, summary_type, source_repo
+
+
 def save_session_summary(
     text: str,
     topic: str = "auto",
@@ -428,11 +440,16 @@ def save_session_summary(
     path = summary_output_path(resolved_topic, title)
     final_title = title or llm_title or "Session Summary"
 
+    repo_scope, summary_type, source_repo = _summary_metadata_defaults()
+
     payload = {
         "id": f"SUM-{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "topic": resolved_topic,
         "target_folder": str(path.parent.relative_to(REPO_ROOT)),
+        "repo_scope": repo_scope,
+        "summary_type": summary_type,
+        "source_repo": source_repo,
         "title": final_title,
         "summary_bullets": bullets,
         "decisions": decisions,
@@ -450,10 +467,14 @@ def save_session_summary(
 
 def load_session_summaries(limit: int | None = None) -> list[dict]:
     rows: list[dict] = []
+    default_repo_scope, default_summary_type, default_source_repo = _summary_metadata_defaults()
     for p in sorted(REPO_ROOT.rglob(f"{SUMMARY_DIRNAME}/*.yaml"), reverse=True):
         doc = _load_yaml(p)
         if not doc:
             continue
+        doc.setdefault("repo_scope", default_repo_scope)
+        doc.setdefault("summary_type", default_summary_type)
+        doc.setdefault("source_repo", default_source_repo)
         doc["path"] = str(p.relative_to(REPO_ROOT))
         rows.append(doc)
         if limit and len(rows) >= limit:
@@ -585,6 +606,9 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
     topic_field = "topic" if "topic" in by_name else ("category" if "category" in by_name else "")
     source_field = "source_path" if "source_path" in by_name else ("source" if "source" in by_name else "")
     created_field = "created_at" if "created_at" in by_name else ("timestamp" if "timestamp" in by_name else "")
+    repo_scope_field = "repo_scope" if "repo_scope" in by_name else ""
+    summary_type_field = "summary_type" if "summary_type" in by_name else ""
+    source_repo_field = "source_repo" if "source_repo" in by_name else ""
 
     docs = []
     for s in index.get("session_summaries", []):
@@ -600,6 +624,12 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
             doc[source_field] = s.get("path", "")
         if created_field:
             doc[created_field] = s.get("created_at", "")
+        if repo_scope_field:
+            doc[repo_scope_field] = s.get("repo_scope", "")
+        if summary_type_field:
+            doc[summary_type_field] = s.get("summary_type", "")
+        if source_repo_field:
+            doc[source_repo_field] = s.get("source_repo", "")
         docs.append(doc)
 
     return docs, f"Schema detected: key={key_field}, content={content_field}"
