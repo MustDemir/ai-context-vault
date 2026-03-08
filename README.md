@@ -1,4 +1,4 @@
-# 🏦 AI Context Vault
+# AI Context Vault
 
 **A reusable toolkit for turning AI sessions into structured, searchable project artifacts.**
 
@@ -35,7 +35,7 @@ After 20 sessions, I had:
 
 > **Literature says:** Cloud-based artifact management with structure (not just files) improves collaboration in distributed teams (Schlegel & Sattler, 2022; Gaikwad, 2024).
 
-### PD2: 🏝️ Isolated Knowledge Silos
+### PD2: Isolated Knowledge Silos
 
 ```
 Claude Projects    → only accessible in Claude
@@ -47,7 +47,7 @@ My knowledge was **fragmented** – no shared layer across models.
 
 > **Literature says:** Cloud-based knowledge services improve accessibility and coordination in distributed teams (Gupta et al., 2022; Muralikumar & McDonald, 2025).
 
-### PD3: 📜 No Compliance-Ready Documentation
+### PD3: No Compliance-Ready Documentation
 
 For regulated or research-heavy AI work, I needed:
 - Versioned artifacts with timestamps and sources
