@@ -1,6 +1,6 @@
 # AI Context Vault
 
-**A reusable toolkit for turning AI sessions into structured, searchable project artifacts — plus a thesis-writing support system built on top.**
+**A reusable toolkit for turning AI sessions into structured, searchable project artifacts — plus a thesis workflow support system built on top.**
 
 > This repo packages a workflow I originally built in a thesis setting into a reusable toolkit. The core problem was stable across projects: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for knowledge-intensive AI work.
 
@@ -20,8 +20,8 @@
 - Integrated robust fallback summarization paths (Claude → Azure OpenAI → local rules).
 - Built `docs/thesis_state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
-### Thesis-Writing Orchestration (6-Skill Plugin System)
-- Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that supports the academic writing process — from pre-flight checks through guided drafting and revision support to post-session verification.
+### Thesis Workflow Orchestration
+- Designed and implemented a **multi-stage Cowork plugin** (`thesis-workflow`) that supports the academic thesis workflow — from pre-flight checks through guided drafting and revision support to post-session verification.
 - Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
 - Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
 - Integrated **university requirements as code**: Prof. Prinz style rules and SRH grading criteria codified as explicit checks across all workflow skills.
@@ -90,30 +90,23 @@ I combined **3 established best practices** from research into one toolkit:
 
 ---
 
-## Thesis-Writing Plugin: 6-Skill Support Layer
+## Thesis Workflow Support Layer
 
-Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis-writing process for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
+Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis workflow for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
 
 The human author remains responsible for argumentation, wording, and the final submitted text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.
 
-### The 6 Skills
+### Core Capabilities
 
-| # | Skill | Trigger | What It Does |
-|---|-------|---------|-------------|
-| 1 | **thesis-session-manager** | "neue session", "resume" | Coordinates start → preflight → writing support → post-session |
-| 2 | **thesis-preflight** | "preflight", "GO vorbereiten" | P0 (lade_manifest) + P1–P6: Expose, chapter texts, sessions, decisions, sources, university requirements |
-| 3 | **thesis-writer** | "GO", "FINAL" | Paragraph-level drafting and revision support with BELEG/CLAIM/MATCH proof protocols and APA7 checks |
-| 4 | **thesis-reviewer** | "review kapitel", "gutachten" | Structured rubric-based review support: R1–R6 scoring against SRH 50/30/20 criteria |
-| 5 | **thesis-consistency** | "konsistenz pruefen" | 7 consistency dimensions: terminology, red thread, budget, forward refs, drift, cross-chapter, university |
-| 6 | **thesis-post-session** | "fertig fuer heute" | 6-point verification (A–F): artifacts, chapter_state, summary, decisions, diff, expose delta |
+- **Session preparation**: dependency loading, chapter context, source scope, and prerequisite checks before work begins.
+- **Drafting and revision support**: paragraph-level evidence support with BELEG/CLAIM/MATCH scaffolding and APA7-oriented checks.
+- **Consistency and review support**: rubric-based review, terminology checks, cross-chapter consistency checks, and red-thread control.
+- **Session closure and traceability**: post-session verification, structured summaries, progress updates, and repository traceability.
 
 ### Workflow
 
 ```
-Session Start → session-manager (S1–S5) → preflight (P0–P6) → "GO" → writer → post-session (A–F) → save.py
-                                                                                    ↓
-                                                              consistency (K1–K7) ← bei Bedarf
-                                                              reviewer (R1–R6)   ← bei Bedarf
+Session Start → preparation → drafting support → review/consistency checks → post-session verification → save.py
 ```
 
 ### lade_manifest: Per-Chapter Dependency Management
@@ -132,7 +125,7 @@ lade_manifest:
 
 **Universal pflicht files** (loaded for every chapter): DSR methodology (Kap. 3 DOCX) + university requirements (`pruefkatalog.md`).
 
-This system supplements (never replaces) existing checks — all 6 skills read the manifest before execution.
+This system supplements (never replaces) existing checks — all workflow stages read the manifest before execution.
 
 ---
 
@@ -168,7 +161,7 @@ flowchart TB
         direction TB
         GIT["Git Repository\n(YAML + Markdown)"]
         CHAT["AI Chat Session\n(Claude, ChatGPT, etc.)"]
-        SKILLS["Cowork Plugin\n6 Thesis Skills"]
+        SKILLS["Cowork Plugin\nThesis Support Stages"]
     end
 
     subgraph AZURE["Azure Cloud"]
@@ -186,7 +179,7 @@ flowchart TB
     end
 
     CHAT -->|"Work in AI session"| GIT
-    SKILLS -->|"Support writing workflow"| CHAT
+    SKILLS -->|"Support thesis workflow"| CHAT
     GIT -->|"reindex.py"| BLOB
     BLOB -->|"auto-index"| SEARCH
     SEARCH -->|"search.py"| CHAT
@@ -205,7 +198,7 @@ flowchart TB
 sequenceDiagram
     participant User
     participant AI as AI Model (any)
-    participant Skills as Thesis Skills (6)
+    participant Skills as Support Stages
     participant Scripts as CLI Scripts
     participant Azure as Azure Cloud
 
@@ -215,7 +208,7 @@ sequenceDiagram
     Scripts-->>User: compact context + lade_manifest dependencies
     User->>AI: Continue working
 
-    Note over User,Azure: THESIS WRITING SUPPORT
+    Note over User,Azure: THESIS WORKFLOW SUPPORT
     User->>Skills: "preflight Kap. 5.4"
     Skills->>Skills: P0 lade_manifest → P1–P6 checks
     Skills-->>User: Preflight protocol + checklist
@@ -339,14 +332,8 @@ ai-context-vault/
 │   ├── weekly_branch_drift.py  # Branch drift snapshot
 │   ├── workflow_smoke.py   # Local workflow smoke tests
 │   └── generate_diagrams.py   # Thesis diagram generation (Pillow)
-├── skills/                    # Thesis-Writing Skills (Cowork Plugin Source)
-│   ├── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
-│   ├── thesis-preflight/      # P0 (lade_manifest) + P1–P6
-│   ├── thesis-writer/         # BELEG/CLAIM/MATCH + APA7
-│   ├── thesis-reviewer/       # R1–R6 rubric-based review support
-│   ├── thesis-consistency/    # K1–K7 cross-chapter
-│   ├── thesis-post-session/   # A–F verification
-│   └── thesis-session-manager/  # S1–S5 / E1–E4 orchestration
+├── skills/                    # Thesis workflow skill definitions and references
+│   └── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
 ├── plugins/
 │   └── thesis-workflow_v3.plugin  # Installable Cowork plugin (ZIP)
 ├── legacy/                    # Archived plugin/scripts snapshots from older workflow versions
@@ -479,7 +466,7 @@ The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern*
 │                                                   │
 │  Git repo ──→ resume.py ──→ Any AI model          │
 │       ↑                            ↓              │
-│  "speichern" ←── AI Chat + 6 Thesis Skills        │
+│  "speichern" ←── AI Chat + Support Stages         │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -487,7 +474,7 @@ The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern*
 
 ## Use Cases
 
-- **Thesis Management** – Track requirements, gates, progress across chapters with 6 supporting skills
+- **Thesis Management** – Track requirements, gates, progress, and review steps across chapters
 - **Intelligent Save** – `save.py` creates compact summary YAML, routes it, and syncs
 - **Multi-Model Projects** – Shared knowledge base across Claude, ChatGPT, Gemini via Azure
 - **Compliance Documentation** – Git-versioned evidence chain (EU AI Act, ISO 42001)
@@ -512,4 +499,4 @@ MIT License – see [LICENSE](LICENSE)
 
 ---
 
-*Built with Azure, Claude API, Python, and Cowork. I recognized a problem in my AI workflow, researched how established best practices could solve it, and implemented a toolkit with a thesis-writing support layer on top. It's research-backed engineering, not reinventing the wheel.*
+*Built with Azure, Claude API, Python, and Cowork. I recognized a problem in my AI workflow, researched how established best practices could solve it, and implemented a toolkit with a thesis workflow support layer on top. It's research-backed engineering, not reinventing the wheel.*
