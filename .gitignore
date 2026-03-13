@@ -37,3 +37,8 @@ Thumbs.db
 
 # Optional local notes input
 session_notes.txt
+
+# Local experimental skill variants
+skills/thesis-writing-support/
+*write*
+*Write*
