@@ -18,7 +18,7 @@
 - Implemented one-command session persistence with auto-routing (`save.py`) and resumable context (`resume.py`).
 - Added cloud synchronization and retrieval (`reindex.py`, AI Search, Blob Storage) for cross-session continuity.
 - Integrated robust fallback summarization paths (Claude → Azure OpenAI → local rules).
-- Built `thesis_state.md` as git-tracked SSOT (Single Source of Truth) with automated generation from chapter states.
+- Built `docs/thesis_state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
 ### Thesis-Writing Orchestration (6-Skill Plugin System)
 - Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that orchestrates the entire academic writing process — from pre-flight checks through writing to post-session verification.
@@ -299,7 +299,7 @@ python3 scripts/search.py "what are the compliance requirements?"
 
 ```bash
 # The plugin file is in plugins/
-# Install via Cowork: drag thesis-workflow-v2.2.0.plugin into Cowork
+# Install via Cowork: drag plugins/thesis-workflow_v3.plugin into Cowork
 ```
 
 ---
@@ -326,7 +326,7 @@ ai-context-vault/
 ├── scripts/
 │   ├── save.py             # Primary end-of-session summary save (3-tier LLM fallback)
 │   ├── workflow_lib.py     # Shared save/reindex/resume logic + lade_manifest support
-│   ├── resume.py           # Compact resume context + thesis_state.md (SSOT)
+│   ├── resume.py           # Compact resume context + generated docs/thesis_state.md
 │   ├── reindex.py          # Sync summaries to Azure (Blob + Search) with SHA-256 dedup
 │   ├── search.py           # Cross-session RAG query (Azure AI Search + Claude)
 │   ├── extract_yamls.py    # Legacy/manual YAML extraction from chat exports
@@ -335,6 +335,7 @@ ai-context-vault/
 │   ├── update_progress.py  # README progress bar generation
 │   ├── weekly_audit.py     # Weekly GitHub Issue audit (structure, stale files)
 │   ├── weekly_branch_drift.py  # Branch drift snapshot
+│   ├── workflow_smoke.py   # Local workflow smoke tests
 │   └── generate_diagrams.py   # Thesis diagram generation (Pillow)
 ├── skills/                    # Thesis-Writing Skills (Cowork Plugin Source)
 │   ├── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
@@ -345,7 +346,8 @@ ai-context-vault/
 │   ├── thesis-post-session/   # A–F verification
 │   └── thesis-session-manager/  # S1–S5 / E1–E4 orchestration
 ├── plugins/
-│   └── thesis-workflow-v2.2.0.plugin  # Installable Cowork plugin (ZIP)
+│   └── thesis-workflow_v3.plugin  # Installable Cowork plugin (ZIP)
+├── legacy/                    # Archived plugin/scripts snapshots from older workflow versions
 ├── docs/
 │   ├── ARCHITECTURE.md        # Design decisions
 │   ├── ACADEMIC_VALIDATION.md # Research backing
@@ -384,7 +386,7 @@ Pipeline:
 
 ```
 Input:  All chapter_state.yaml + session summaries
-Output: .memory/resume_context.txt (cache) + docs/thesis_state.md (SSOT)
+Output: .memory/resume_context.txt (cache) + docs/thesis_state.md (generated SSOT snapshot)
 
 thesis_state.md contains:
 - Kapitelstatus with progress
