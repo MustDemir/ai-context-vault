@@ -21,10 +21,10 @@
 - Built `docs/thesis_state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
 ### Thesis-Writing Orchestration (6-Skill Plugin System)
-- Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that supports the academic writing process — from pre-flight checks through guided drafting support to post-session verification.
+- Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that supports the academic writing process — from pre-flight checks through guided drafting and revision support to post-session verification.
 - Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
-- Implemented **automated quality assurance** with 7 consistency dimensions, academic reviewer simulation (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
-- Integrated **university requirements as code**: Prof. Prinz style rules and SRH grading criteria codified as enforceable checks across all workflow skills.
+- Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
+- Integrated **university requirements as code**: Prof. Prinz style rules and SRH grading criteria codified as explicit checks across all workflow skills.
 - Created **CI/CD for academic writing**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
 
 ### Cloud & DevOps
@@ -94,14 +94,16 @@ I combined **3 established best practices** from research into one toolkit:
 
 Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis-writing process for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
 
+The human author remains responsible for argumentation, wording, and the final submitted text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.
+
 ### The 6 Skills
 
 | # | Skill | Trigger | What It Does |
 |---|-------|---------|-------------|
-| 1 | **thesis-session-manager** | "neue session", "resume" | Orchestrates start → preflight → writing support → post-session |
+| 1 | **thesis-session-manager** | "neue session", "resume" | Coordinates start → preflight → writing support → post-session |
 | 2 | **thesis-preflight** | "preflight", "GO vorbereiten" | P0 (lade_manifest) + P1–P6: Expose, chapter texts, sessions, decisions, sources, university requirements |
-| 3 | **thesis-writer** | "GO", "FINAL" | Paragraph-level writing support with BELEG/CLAIM/MATCH proof protocols and APA7 enforcement |
-| 4 | **thesis-reviewer** | "review kapitel", "gutachten" | Academic reviewer simulation: R1–R6 scoring (SRH 50/30/20 criteria) |
+| 3 | **thesis-writer** | "GO", "FINAL" | Paragraph-level drafting and revision support with BELEG/CLAIM/MATCH proof protocols and APA7 checks |
+| 4 | **thesis-reviewer** | "review kapitel", "gutachten" | Structured rubric-based review support: R1–R6 scoring against SRH 50/30/20 criteria |
 | 5 | **thesis-consistency** | "konsistenz pruefen" | 7 consistency dimensions: terminology, red thread, budget, forward refs, drift, cross-chapter, university |
 | 6 | **thesis-post-session** | "fertig fuer heute" | 6-point verification (A–F): artifacts, chapter_state, summary, decisions, diff, expose delta |
 
@@ -341,7 +343,7 @@ ai-context-vault/
 │   ├── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
 │   ├── thesis-preflight/      # P0 (lade_manifest) + P1–P6
 │   ├── thesis-writer/         # BELEG/CLAIM/MATCH + APA7
-│   ├── thesis-reviewer/       # R1–R6 academic reviewer
+│   ├── thesis-reviewer/       # R1–R6 rubric-based review support
 │   ├── thesis-consistency/    # K1–K7 cross-chapter
 │   ├── thesis-post-session/   # A–F verification
 │   └── thesis-session-manager/  # S1–S5 / E1–E4 orchestration
