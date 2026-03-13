@@ -24,8 +24,7 @@
 - Designed and implemented a **multi-stage Cowork plugin** (`thesis-workflow`) that supports the academic thesis workflow — from pre-flight checks through guided drafting and revision support to post-session verification.
 - Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
 - Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
-- Integrated **university requirements as code**: Prof. Prinz style rules and SRH grading criteria codified as explicit checks across all workflow skills.
-- Created **CI/CD for academic writing**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
+- Created **CI/CD**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
 
 ### Cloud & DevOps
 - Productionized multi-repo isolation with dedicated Blob containers to prevent cross-project context mixing.
