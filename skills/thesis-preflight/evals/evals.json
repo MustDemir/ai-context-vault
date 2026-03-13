@@ -1,0 +1,23 @@
+{
+  "skill_name": "thesis-preflight",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Ich will jetzt Kap. 2.1 schreiben — Grundlagen zu MLOps und GenAIOps. Mach bitte den Preflight.",
+      "expected_output": "Preflight-Protokoll mit P1-P6 Ergebnissen, Argumentationsstruktur-Tabelle, Inhalts-Checklist, Negativ-Checklist, Pflicht-Zitate, und 'Bereit für GO'",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "preflight für kap 4.2 — anforderungsableitung aus dem EU AI Act. bitte lies die entscheidungspapiere genau durch",
+      "expected_output": "Preflight-Protokoll mit besonders gründlichem P4 (Entscheidungspapiere), Deployer-Scope-Prüfung, Art. 26 Fokus in Negativ-Checklist",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Was muss ich beachten für den Abschnitt zur Referenzarchitektur-Beschreibung in Kap 5.2?",
+      "expected_output": "Preflight-Protokoll für Kap. 5.2 mit Forward-Reference-Check, DSR-Phasen-Mapping (Design-Phase), Budget-Check, Cross-chapter Abhängigkeiten zu Kap. 4",
+      "files": []
+    }
+  ]
+}

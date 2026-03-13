@@ -1,0 +1,17 @@
+{
+  "skill_name": "thesis-post-session",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "fertig für heute — wir haben Kap. 2.1 und 2.2 geschrieben",
+      "expected_output": "Post-Session-Protokoll mit 6 Prüfpunkten (A-F), chapter_state Update, save.py Aufruf, Git-Status, Next-Session Briefing",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "session ende — bitte save und commiten",
+      "expected_output": "Post-Session-Check durchlaufen, save.py mit generiertem Summary, Git-Commit vorbereitet mit korrektem Message-Format",
+      "files": []
+    }
+  ]
+}

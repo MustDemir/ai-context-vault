@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Shared helpers for AI Context Vault workflow scripts."""
+"""Shared helpers for local thesis workflow scripts."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
 import ssl
 import subprocess
+import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 from urllib import request
@@ -21,34 +21,44 @@ try:
 except Exception:  # pragma: no cover
     yaml = None
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent  # scripts/ → genaiops-thesis/
 MEMORY_DIR = REPO_ROOT / ".memory"
 INDEX_PATH = MEMORY_DIR / "index.json"
 RESUME_PATH = MEMORY_DIR / "resume_context.txt"
-BLOB_SYNC_STATE_PATH = MEMORY_DIR / "blob_sync_state.json"
 
 TRACKED_EXTENSIONS = {".md", ".yaml", ".yml", ".csv", ".txt"}
-EXCLUDE_DIRS = {".git", ".memory", "backups", "__pycache__", ".venv", "venv", "env"}
+EXCLUDE_DIRS = {".git", ".memory", "backups", "__pycache__"}
 SUMMARY_DIRNAME = "session_summaries"
+BLOB_SYNC_STATE_PATH = MEMORY_DIR / "blob_sync_state.json"
+INPUT_BLOB_SYNC_STATE_PATH = MEMORY_DIR / "blob_input_sync_state.json"
+INPUT_FILES_DIR = REPO_ROOT / "98_onedrive_migration" / "1_masterarbeit" / "00_input_files"
 
 TOPIC_TO_DIR = {
-    "architecture": "docs/session_summaries",
-    "requirements": "examples/session_summaries",
-    "evaluation": "docs/session_summaries",
-    "methodology": "docs/session_summaries",
-    "general": "examples/session_summaries",
+    "architektur": "05_referenzarchitektur_RQ2/session_summaries",
+    "anforderungen": "04_anforderungsanalyse_RQ1/session_summaries",
+    "evaluation": "06_evaluation_RQ3/session_summaries",
+    "methodik": "03_forschungsdesign_methodik/session_summaries",
+    "theorie": "02_rigor_theorie_stand_forschung/session_summaries",
+    "einleitung": "01_einleitung/session_summaries",
+    "diskussion": "07_diskussion/session_summaries",
+    "fazit": "08_fazit_ausblick/session_summaries",
+    "general": "99_inbox_unsorted/session_summaries",
 }
 
 TOPIC_HINTS = {
-    "architecture": ["architecture", "architektur", "rq2", "gate", "quality gate"],
-    "requirements": ["requirement", "anforderung", "rq1", "must", "should"],
-    "evaluation": ["evaluation", "rq3", "interview", "coverage", "validierung"],
-    "methodology": ["method", "methodik", "dsr", "design science", "research design"],
+    "architektur": ["architektur", "architecture", "rq2", "quality gate", "gate"],
+    "anforderungen": ["anforderung", "requirement", "rq1", "muss", "soll"],
+    "evaluation": ["evaluation", "rq3", "interview", "validierung", "coverage"],
+    "methodik": ["methodik", "dsr", "forschungsdesign", "design science"],
+    "theorie": ["theorie", "rigor", "literatur", "stand der forschung", "related work"],
+    "einleitung": ["einleitung", "problemstellung", "motivation"],
+    "diskussion": ["diskussion", "limitation", "kritik"],
+    "fazit": ["fazit", "ausblick", "conclusion"],
 }
 
-DEFAULT_REPO_SCOPE = "vault"
-DEFAULT_SUMMARY_TYPE = "technisch"
-DEFAULT_SOURCE_REPO = "ai-context-vault"
+DEFAULT_REPO_SCOPE = "thesis"
+DEFAULT_SUMMARY_TYPE = "fachlich"
+DEFAULT_SOURCE_REPO = "genaiops-thesis"
 
 
 @dataclass
@@ -70,31 +80,41 @@ def load_dotenv(path: Path | None = None) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and value:
-            # .env values always win over empty/missing env vars
-            if key not in os.environ or not os.environ[key]:
-                os.environ[key] = value
+        if key and key not in os.environ:
+            os.environ[key] = value
 
 
-def _tls_context() -> ssl.SSLContext | None:
-    """Build TLS context with proper CA bundle; fallback to system defaults.
+def _is_truthy_env(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
-    Uses secure defaults and only disables verification if explicitly requested.
-    """
-    insecure = os.getenv("AZURE_INSECURE_TLS", "").lower() in {"1", "true", "yes"}
-    if insecure:
+
+def _build_tls_context(*insecure_env_names: str) -> ssl.SSLContext:
+    if any(_is_truthy_env(name) for name in insecure_env_names):
         return ssl._create_unverified_context()
 
-    explicit_ca = os.getenv("SSL_CERT_FILE", "") or os.getenv("REQUESTS_CA_BUNDLE", "")
-    if explicit_ca and Path(explicit_ca).exists():
-        return ssl.create_default_context(cafile=explicit_ca)
+    ca_bundle = os.getenv("AZURE_CA_BUNDLE", "").strip() or os.getenv("SSL_CERT_FILE", "").strip()
+    if ca_bundle:
+        return ssl.create_default_context(cafile=ca_bundle)
 
     try:
-        import certifi  # type: ignore
+        import certifi
 
         return ssl.create_default_context(cafile=certifi.where())
     except Exception:
         return ssl.create_default_context()
+
+
+def _ssl_hint(error: Exception) -> str:
+    reason = getattr(error, "reason", error)
+    text = str(reason)
+    if isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in text:
+        return (
+            "TLS-Zertifikatspruefung fehlgeschlagen (CERTIFICATE_VERIFY_FAILED). "
+            "macOS-Fix: '/Applications/Python 3.x/Install Certificates.command' ausfuehren "
+            "oder AZURE_CA_BUNDLE/SSL_CERT_FILE auf ein gueltiges CA-Bundle setzen. "
+            "Nur als Notfall: AZURE_SEARCH_INSECURE_TLS=1."
+        )
+    return ""
 
 
 def _load_yaml(path: Path) -> dict:
@@ -110,7 +130,7 @@ def _load_yaml(path: Path) -> dict:
 
 def _dump_yaml(path: Path, payload: dict) -> None:
     if yaml is None:
-        raise RuntimeError("PyYAML missing. Install with: pip install pyyaml")
+        raise RuntimeError("PyYAML fehlt. Bitte installieren: pip install pyyaml")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
@@ -183,117 +203,11 @@ def extract_actions(text: str) -> tuple[list[str], list[str]]:
         line = raw.strip().lower()
         if not line:
             continue
-        if any(k in line for k in ["decision", "entscheidung", "we will", "we choose"]):
+        if any(k in line for k in ["entscheidung", "decision", "beschluss", "wir machen"]):
             decisions.append(raw.strip())
-        if any(k in line for k in ["next", "todo", "next step", "offen", "naechste", "nächste"]):
+        if any(k in line for k in ["naechste", "nächste", "todo", "to-do", "next step", "offen"]):
             next_steps.append(raw.strip())
     return decisions[:6], next_steps[:8]
-
-
-def anthropic_configured() -> bool:
-    load_dotenv()
-    return bool(os.getenv("ANTHROPIC_API_KEY"))
-
-
-def _anthropic_chat_complete(messages: list[dict], max_tokens: int = 300) -> str:
-    load_dotenv()
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    model = os.getenv("ANTHROPIC_SUMMARY_MODEL", "claude-haiku-4-5-20251001")
-    temperature = float(os.getenv("ANTHROPIC_TEMPERATURE", "0.1"))
-
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY missing.")
-
-    system_msg = ""
-    anthropic_messages = []
-    for m in messages:
-        if m["role"] == "system":
-            system_msg = m["content"]
-        else:
-            anthropic_messages.append({"role": m["role"], "content": m["content"]})
-
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "messages": anthropic_messages,
-    }
-    if system_msg:
-        payload["system"] = system_msg
-
-    req = request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps(payload).encode("utf-8"),
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    context = _tls_context()
-    with request.urlopen(req, timeout=45, context=context) as resp:
-        body = resp.read().decode("utf-8", errors="replace")
-        result = json.loads(body)
-        # Extract text from Anthropic response format
-        content_blocks = result.get("content", [])
-        return content_blocks[0].get("text", "") if content_blocks else ""
-
-
-def summarize_with_claude(text: str, max_bullets: int = 8) -> tuple[list[str], list[str], list[str], str]:
-    max_input_chars = int(os.getenv("ANTHROPIC_MAX_INPUT_CHARS", "6000"))
-    safe_text = text[:max_input_chars]
-    prompt = (
-        "Summarize this work session in concise project notes. "
-        "Return ONLY valid JSON with keys: title (string), summary_bullets (array), "
-        "decisions (array), next_steps (array). "
-        f"Limit summary_bullets to max {max_bullets}. "
-        "Return raw JSON only, no markdown fences."
-    )
-    messages = [
-        {"role": "system", "content": "You write compact and precise engineering notes. Always respond with raw JSON only."},
-        {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
-    ]
-    content = _anthropic_chat_complete(messages, max_tokens=int(os.getenv("ANTHROPIC_MAX_OUTPUT_TOKENS", "2000")))
-    # Strip markdown fences if present
-    content = content.strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\s*", "", content)
-        content = re.sub(r"\s*```$", "", content)
-    # Repair truncated JSON: close open strings/arrays/objects
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        repaired = content.rstrip().rstrip(",")
-        for ch in ['"', "]", "}"]:
-            try:
-                parsed = json.loads(repaired)
-                break
-            except json.JSONDecodeError:
-                repaired += ch
-        else:
-            parsed = json.loads(repaired)
-
-    bullets = parsed.get("summary_bullets", []) or []
-    decisions = parsed.get("decisions", []) or []
-    next_steps = parsed.get("next_steps", []) or []
-    title = parsed.get("title", "") or ""
-
-    def _clean(items: list, limit: int) -> list[str]:
-        out: list[str] = []
-        for i in items:
-            s = str(i).strip()
-            if not s:
-                continue
-            if len(s) > 220:
-                s = s[:217].rstrip() + "..."
-            if s not in out:
-                out.append(s)
-            if len(out) >= limit:
-                break
-        return out
-
-    return _clean(bullets, max_bullets), _clean(decisions, 6), _clean(next_steps, 8), title
 
 
 def azure_openai_configured() -> bool:
@@ -314,7 +228,7 @@ def _azure_openai_chat_complete(messages: list[dict]) -> dict:
     temperature = float(os.getenv("AZURE_OPENAI_TEMPERATURE", "0.1"))
 
     if not endpoint or not key or not deployment:
-        raise RuntimeError("AZURE_OPENAI_* config missing.")
+        raise RuntimeError("AZURE_OPENAI_* Konfiguration fehlt.")
 
     url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
     payload = {
@@ -330,7 +244,7 @@ def _azure_openai_chat_complete(messages: list[dict]) -> dict:
         method="POST",
         headers={"Content-Type": "application/json", "api-key": key},
     )
-    context = _tls_context()
+    context = _build_tls_context("AZURE_OPENAI_INSECURE_TLS", "AZURE_INSECURE_TLS", "AZURE_SEARCH_INSECURE_TLS")
     with request.urlopen(req, timeout=45, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         return json.loads(body)
@@ -340,17 +254,21 @@ def summarize_with_azure_openai(text: str, max_bullets: int = 8) -> tuple[list[s
     max_input_chars = int(os.getenv("AZURE_OPENAI_MAX_INPUT_CHARS", "6000"))
     safe_text = text[:max_input_chars]
     prompt = (
-        "Summarize this work session in concise project notes. "
-        "Return ONLY valid JSON with keys: title (string), summary_bullets (array), "
-        "decisions (array), next_steps (array). "
-        f"Limit summary_bullets to max {max_bullets}."
+        "Fasse die Session fuer eine Masterarbeit kompakt zusammen. "
+        "Gib NUR gueltiges JSON zurueck mit den Schluesseln: "
+        "title (string), summary_bullets (array), decisions (array), next_steps (array). "
+        f"summary_bullets max {max_bullets} Eintraege, jeweils kurze, klare Stichpunkte."
     )
     messages = [
-        {"role": "system", "content": "You write compact and precise engineering notes."},
+        {"role": "system", "content": "Du strukturierst wissenschaftliche Arbeitsnotizen praezise und knapp."},
         {"role": "user", "content": f"{prompt}\n\nSESSION:\n{safe_text}"},
     ]
     result = _azure_openai_chat_complete(messages)
-    content = result.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    content = (
+        result.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "{}")
+    )
     parsed = json.loads(content)
 
     bullets = parsed.get("summary_bullets", []) or []
@@ -404,29 +322,18 @@ def save_session_summary(
         resolved_topic = "general"
 
     llm_used = False
-    engine_name = "local_rules"
     llm_error = ""
     llm_title = ""
     bullets: list[str] = []
     decisions: list[str] = []
     next_steps: list[str] = []
 
-    # 3-tier fallback: Claude (Anthropic) → Azure OpenAI → local rules
-    if use_llm and anthropic_configured():
-        try:
-            bullets, decisions, next_steps, llm_title = summarize_with_claude(text)
-            llm_used = True
-            engine_name = "anthropic_claude"
-        except Exception as e:
-            llm_error = f"[anthropic] {e}"
-
-    if use_llm and not llm_used and azure_openai_configured():
+    if use_llm and azure_openai_configured():
         try:
             bullets, decisions, next_steps, llm_title = summarize_with_azure_openai(text)
             llm_used = True
-            engine_name = "azure_openai"
         except Exception as e:
-            llm_error += f" [aoai] {e}" if llm_error else str(e)
+            llm_error = str(e)
 
     if not bullets:
         bullets = summarize_text_to_bullets(text)
@@ -456,11 +363,10 @@ def save_session_summary(
         "next_steps": next_steps,
         "tags": tags or [],
         "source": source,
-        "summary_engine": engine_name,
+        "summary_engine": "azure_openai" if llm_used else "local_rules",
     }
     if llm_error:
         payload["summary_engine_error"] = llm_error[:300]
-
     _dump_yaml(path, payload)
     return path, payload
 
@@ -500,12 +406,63 @@ def build_index() -> dict:
         except Exception:
             continue
 
+    chapter_states = []
+    _seen_chapters = set()
+    for p in sorted(REPO_ROOT.rglob("chapter_state.yaml")):
+        chapter_dir = str(p.parent.relative_to(REPO_ROOT))
+        if chapter_dir in _seen_chapters:
+            continue
+        _seen_chapters.add(chapter_dir)
+        meta = _load_yaml(p)
+        chapter_states.append(
+            {
+                "path": str(p.relative_to(REPO_ROOT)),
+                "chapter": meta.get("chapter", meta.get("kapitel", "")),
+                "status": meta.get("status", ""),
+                "current_focus": meta.get("current_focus", ""),
+            }
+        )
+
+    requirements = []
+    req_dir = REPO_ROOT / "04_anforderungsanalyse_RQ1" / "requirements"
+    if req_dir.exists():
+        for p in sorted(req_dir.glob("R*.yaml")):
+            req = _load_yaml(p)
+            requirements.append(
+                {
+                    "id": req.get("id", p.stem),
+                    "title": req.get("title", ""),
+                    "type": req.get("type", ""),
+                    "phase": req.get("lifecycle_phase", ""),
+                    "linked_gates": req.get("linked_gates", []),
+                    "path": str(p.relative_to(REPO_ROOT)),
+                }
+            )
+
+    gates = []
+    gate_dir = REPO_ROOT / "05_referenzarchitektur_RQ2" / "05_03_quality_gates"
+    if gate_dir.exists():
+        for p in sorted(gate_dir.rglob("G*.yaml")):
+            gate = _load_yaml(p)
+            gates.append(
+                {
+                    "id": gate.get("id", p.stem),
+                    "name": gate.get("name", ""),
+                    "dimension": gate.get("dimension", ""),
+                    "decision": gate.get("decision", ""),
+                    "path": str(p.relative_to(REPO_ROOT)),
+                }
+            )
+
     summaries = load_session_summaries(limit=None)
 
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "repo_root": str(REPO_ROOT),
         "files": entries,
+        "chapter_states": chapter_states,
+        "requirements": requirements,
+        "gates": gates,
         "session_summaries": summaries,
     }
 
@@ -516,101 +473,61 @@ def write_index(index: dict) -> Path:
     return INDEX_PATH
 
 
-def _env_int(name: str, default: int, minimum: int = 1) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return max(value, minimum)
-
-
-def _parse_created_at(value: str) -> datetime | None:
-    if not value:
-        return None
-    normalized = value.strip()
-    if not normalized:
-        return None
-    if normalized.endswith("Z"):
-        normalized = normalized[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def _select_resume_summaries(summaries: list[dict]) -> tuple[list[dict], int, int, int]:
-    window_hours = _env_int("RESUME_WINDOW_HOURS", 24)
-    min_items = _env_int("RESUME_MIN_ITEMS", 3)
-    max_items = _env_int("RESUME_MAX_ITEMS", 10)
-    if min_items > max_items:
-        min_items = max_items
-
-    now_utc = datetime.now(timezone.utc)
-    cutoff = now_utc - timedelta(hours=window_hours)
-
-    ranked: list[tuple[dict, datetime, int]] = []
-    for index, summary in enumerate(summaries):
-        created = _parse_created_at(str(summary.get("created_at", "")))
-        if created is None:
-            created = datetime.fromtimestamp(0, tz=timezone.utc)
-        ranked.append((summary, created, index))
-
-    ranked.sort(key=lambda item: (item[1], -item[2]), reverse=True)
-
-    selected: list[dict] = []
-    selected_keys: set[str] = set()
-
-    def key_for(summary: dict, index: int) -> str:
-        return str(summary.get("id") or summary.get("path") or f"idx-{index}")
-
-    for summary, created, index in ranked:
-        if created >= cutoff:
-            selected.append(summary)
-            selected_keys.add(key_for(summary, index))
-
-    if len(selected) < min_items:
-        for summary, _, index in ranked:
-            key = key_for(summary, index)
-            if key in selected_keys:
-                continue
-            selected.append(summary)
-            selected_keys.add(key)
-            if len(selected) >= min_items:
-                break
-
-    return selected[:max_items], window_hours, min_items, max_items
-
-
 def build_resume_text(index: dict) -> str:
     lines = []
-    lines.append("Here is my current project status - use this as context:")
+    lines.append("Hier ist mein aktueller Thesis-Stand - bitte nutze das als Kontext:")
     lines.append("")
-    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append(f"Stand: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"Repo: {index.get('repo_root','')}")
-    lines.append(f"Indexed artifacts: {len(index.get('files', []))}")
+    lines.append(f"Artefakte indexiert: {len(index.get('files', []))} Dateien")
     lines.append("")
 
-    summaries = index.get("session_summaries", [])
-    if not isinstance(summaries, list):
-        summaries = []
-    selected, window_hours, min_items, max_items = _select_resume_summaries(summaries)
-
-    lines.append("Latest session summaries:")
-    lines.append(f"(selection: last {window_hours}h, min {min_items}, max {max_items})")
-    if not selected:
-        lines.append("- No session summaries available yet.")
+    lines.append("Kapitelstatus:")
+    chapter_states = index.get("chapter_states", [])
+    if not chapter_states:
+        lines.append("- Keine chapter_state.yaml gefunden.")
     else:
-        for s in selected:
+        for c in chapter_states:
+            chapter = c.get("chapter") or c.get("path")
+            status = c.get("status") or "unknown"
+            focus = c.get("current_focus") or ""
+            suffix = f" | Fokus: {focus}" if focus else ""
+            lines.append(f"- {chapter}: {status}{suffix}")
+
+    lines.append("")
+    lines.append("Requirements (RQ1):")
+    requirements = index.get("requirements", [])
+    if not requirements:
+        lines.append("- Keine R*.yaml gefunden.")
+    else:
+        for r in requirements:
+            rid = r.get("id", "")
+            title = r.get("title", "") or "(noch ohne Titel)"
+            lines.append(f"- {rid}: {title}")
+
+    lines.append("")
+    lines.append("Quality Gates (RQ2):")
+    gates = index.get("gates", [])
+    if not gates:
+        lines.append("- Keine G*.yaml gefunden.")
+    else:
+        for g in gates:
+            gid = g.get("id", "")
+            dim = g.get("dimension", "")
+            name = g.get("name", "") or "(noch ohne Name)"
+            lines.append(f"- {gid} [{dim}]: {name}")
+
+    lines.append("")
+    lines.append("Letzte Session-Summaries:")
+    summaries = index.get("session_summaries", [])[:5]
+    if not summaries:
+        lines.append("- Keine Session-Summaries vorhanden.")
+    else:
+        for s in summaries:
             topic = s.get("topic", "general")
             title = s.get("title", "Session Summary")
             bullets = s.get("summary_bullets", [])
-            first = bullets[0] if bullets else "(no bullet)"
+            first = bullets[0] if bullets else "(ohne Stichpunkte)"
             lines.append(f"- [{topic}] {title}: {first}")
 
     return "\n".join(lines).strip() + "\n"
@@ -620,6 +537,241 @@ def write_resume_text(text: str) -> Path:
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
     RESUME_PATH.write_text(text, encoding="utf-8")
     return RESUME_PATH
+
+
+# ---------------------------------------------------------------------------
+# Thesis State (git-tracked SSOT) — Schicht 1 fuer KI-Kontext
+# ---------------------------------------------------------------------------
+
+THESIS_STATE_PATH = REPO_ROOT / "docs" / "thesis_state.md"
+GLIEDERUNG_PATH = REPO_ROOT / "00_admin" / "gliederung_v3.md"
+
+
+def _load_full_chapter_states() -> list[dict]:
+    """Load all chapter_state.yaml files with FULL content (decisions, critical_definitions, etc.)."""
+    states = []
+    seen = set()
+    for p in sorted(REPO_ROOT.rglob("chapter_state.yaml")):
+        chapter_dir = str(p.parent.relative_to(REPO_ROOT))
+        if chapter_dir in seen or ".git" in chapter_dir:
+            continue
+        seen.add(chapter_dir)
+        meta = _load_yaml(p)
+        if meta:
+            meta["_path"] = str(p.relative_to(REPO_ROOT))
+            states.append(meta)
+    return states
+
+
+def build_thesis_state(index: dict | None = None) -> str:
+    """Build comprehensive thesis state markdown for docs/thesis_state.md (git-tracked SSOT).
+
+    3-Schichten-Kontextmodell — Schicht 1:
+    - Kapitelstatus mit Fortschritt
+    - Alle Decisions aggregiert (ID + Kapitel + 1-Zeiler + Rationale-Keyword)
+    - Critical Definitions (bindende Begriffe/Abgrenzungen)
+    - Cross-Chapter Impacts
+    - Expose-Gliederung Referenz
+    - Requirements + Gates
+    - Letzte Session-Summaries pro Kapitel
+    """
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    lines: list[str] = []
+
+    lines.append("# Thesis State — Single Source of Truth (Schicht 1)")
+    lines.append("")
+    lines.append(f"> **Automatisch generiert:** {now}  ")
+    lines.append(f"> **Generator:** `resume.py` → `workflow_lib.build_thesis_state()`  ")
+    lines.append("> **Zweck:** KI-Kontext beim Session-Start. Nicht manuell editieren.")
+    lines.append("")
+
+    # --- Expose-Gliederung Referenz ---
+    lines.append("## Expose-Gliederung")
+    lines.append("")
+    if GLIEDERUNG_PATH.exists():
+        lines.append("→ **SSOT:** [`00_admin/gliederung_v3.md`](../00_admin/gliederung_v3.md)")
+        lines.append(f"→ **PDF:** `docs/expose/Expose_v4_final_2026-02-28_encrypted.pdf`")
+    else:
+        lines.append("⚠ `00_admin/gliederung_v3.md` nicht gefunden.")
+    lines.append("")
+
+    # --- Kapitelstatus ---
+    chapter_states = _load_full_chapter_states()
+    lines.append("## Kapitelstatus")
+    lines.append("")
+    if not chapter_states:
+        lines.append("Keine chapter_state.yaml gefunden.")
+    else:
+        for c in chapter_states:
+            chapter = c.get("kapitel") or c.get("chapter", "?")
+            status = c.get("status", "unknown")
+            progress = c.get("progress", c.get("progress_pct", "?"))
+            focus = c.get("current_focus", "")
+            focus_str = f" — {focus}" if focus else ""
+            lines.append(f"- **{chapter}**: {status} ({progress}%){focus_str}")
+    lines.append("")
+
+    # --- lade_manifest Abhängigkeitsmatrix ---
+    lines.append("## lade_manifest (Kapitel-Abhängigkeiten)")
+    lines.append("")
+    any_manifest = False
+    for c in chapter_states:
+        chapter_short = c.get("chapter", "?")
+        manifest = c.get("lade_manifest", {})
+        if not manifest:
+            continue
+        pflicht = manifest.get("pflicht", [])
+        kontext = manifest.get("kontext", [])
+        if pflicht or kontext:
+            any_manifest = True
+            lines.append(f"### {chapter_short}")
+            if pflicht:
+                lines.append(f"- **pflicht** (Volltext): {', '.join(f'`{p}`' for p in pflicht)}")
+            if kontext:
+                lines.append(f"- **kontext** (chapter_state only): {', '.join(f'`{k}`' for k in kontext)}")
+            lines.append("")
+    if not any_manifest:
+        lines.append("Keine lade_manifest-Einträge in chapter_states gefunden.")
+        lines.append("")
+
+    # --- Decisions (aggregiert) ---
+    lines.append("## Decisions (alle Kapitel)")
+    lines.append("")
+    lines.append("| ID | Kapitel | Entscheidung | Rationale-Keyword |")
+    lines.append("|---|---|---|---|")
+    any_decisions = False
+    for c in chapter_states:
+        chapter_short = c.get("chapter", "?")
+        decisions = c.get("decisions", [])
+        if not decisions:
+            continue
+        for d in decisions:
+            if isinstance(d, dict):
+                did = d.get("id", "?")
+                dec = d.get("decision", "?")
+                rat = d.get("rationale", "")
+                # Extract first keyword/phrase from rationale (up to first comma or period)
+                rat_kw = rat.split(",")[0].split(".")[0].strip()[:60] if rat else ""
+                lines.append(f"| {did} | {chapter_short} | {dec} | {rat_kw} |")
+                any_decisions = True
+            elif isinstance(d, str):
+                lines.append(f"| — | {chapter_short} | {d} | — |")
+                any_decisions = True
+    if not any_decisions:
+        lines.append("| — | — | Keine Decisions in chapter_states gefunden | — |")
+    lines.append("")
+
+    # --- Critical Definitions (bindende Begriffe) ---
+    lines.append("## Critical Definitions (bindend fuer Cross-Chapter-Konsistenz)")
+    lines.append("")
+    any_defs = False
+    for c in chapter_states:
+        chapter_short = c.get("chapter", "?")
+        defs = c.get("critical_definitions", [])
+        if defs:
+            for defn in defs:
+                lines.append(f"- **[{chapter_short}]** {defn}")
+                any_defs = True
+    if not any_defs:
+        lines.append("Noch keine critical_definitions in chapter_states definiert.")
+        lines.append("→ Feld `critical_definitions:` in chapter_state.yaml pflegen.")
+    lines.append("")
+
+    # --- Cross-Chapter Impacts ---
+    lines.append("## Cross-Chapter Impacts")
+    lines.append("")
+    any_impacts = False
+    for c in chapter_states:
+        chapter_short = c.get("chapter", "?")
+        impacts = c.get("cross_chapter_impacts", [])
+        if impacts:
+            for imp in impacts:
+                lines.append(f"- **[{chapter_short}]** {imp}")
+                any_impacts = True
+    if not any_impacts:
+        lines.append("Noch keine cross_chapter_impacts in chapter_states definiert.")
+    lines.append("")
+
+    # --- Requirements ---
+    if index:
+        requirements = index.get("requirements", [])
+    else:
+        requirements = []
+    lines.append("## Requirements (RQ1)")
+    lines.append("")
+    if not requirements:
+        lines.append("Keine R*.yaml gefunden.")
+    else:
+        for r in requirements:
+            rid = r.get("id", "")
+            title = r.get("title", "") or "(noch ohne Titel)"
+            phase = r.get("phase", "")
+            phase_str = f" [{phase}]" if phase else ""
+            lines.append(f"- {rid}: {title}{phase_str}")
+    lines.append("")
+
+    # --- Quality Gates ---
+    if index:
+        gates = index.get("gates", [])
+    else:
+        gates = []
+    lines.append("## Quality Gates (RQ2)")
+    lines.append("")
+    if not gates:
+        lines.append("Keine G*.yaml gefunden.")
+    else:
+        for g in gates:
+            gid = g.get("id", "")
+            dim = g.get("dimension", "")
+            name = g.get("name", "") or "(noch ohne Name)"
+            lines.append(f"- {gid} [{dim}]: {name}")
+    lines.append("")
+
+    # --- Session-Summaries (letzte pro Kapitel) ---
+    if index:
+        summaries = index.get("session_summaries", [])
+    else:
+        summaries = []
+    lines.append("## Letzte Session-Summaries")
+    lines.append("")
+    if not summaries:
+        lines.append("Keine Session-Summaries vorhanden.")
+    else:
+        # Group by topic, show last 2 per topic
+        by_topic: dict[str, list] = {}
+        for s in summaries:
+            topic = s.get("topic", "general")
+            by_topic.setdefault(topic, []).append(s)
+        for topic, slist in sorted(by_topic.items()):
+            lines.append(f"### [{topic}]")
+            for s in slist[-3:]:  # last 3 per topic
+                title = s.get("title", "Session Summary")
+                bullets = s.get("summary_bullets", [])
+                first = bullets[0] if bullets else "(ohne Stichpunkte)"
+                lines.append(f"- {title}: {first}")
+            lines.append("")
+    lines.append("")
+
+    # --- Kontext-Hinweis ---
+    lines.append("---")
+    lines.append("")
+    lines.append("**3-Schichten-Kontextmodell:**")
+    lines.append("1. **Schicht 1** (dieses Dokument): Gesamtbild — Decisions, Definitionen, Status")
+    lines.append("2. **Schicht 2** (Session-Summary YAMLs): Inhaltliche Argumentation pro Session")
+    lines.append("3. **Schicht 3** (Kapitel-MDs/PDFs): Volltext — nur lesen wenn Schicht 1+2 nicht ausreichen")
+    lines.append("")
+    lines.append("→ Wenn eine Decision oder Definition fuer den aktuellen Text relevant ist,")
+    lines.append("  ZUERST die Session-Summary YAML lesen (Schicht 2).")
+    lines.append("  Nur bei Unsicherheit den Volltext anfordern (Schicht 3).")
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def write_thesis_state(text: str) -> Path:
+    """Write thesis state to git-tracked docs/thesis_state.md."""
+    THESIS_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    THESIS_STATE_PATH.write_text(text, encoding="utf-8")
+    return THESIS_STATE_PATH
 
 
 def azure_configured() -> bool:
@@ -637,10 +789,15 @@ def blob_configured() -> bool:
     return bool(account and key)
 
 
+def input_blob_sync_enabled() -> bool:
+    load_dotenv()
+    return _is_truthy_env("AZURE_INPUT_BLOB_SYNC")
+
+
 def _fetch_azure_index_schema(endpoint: str, key: str, index_name: str, api_version: str) -> tuple[dict, str]:
     url = f"{endpoint}/indexes/{index_name}?api-version={api_version}"
     req = request.Request(url, method="GET", headers={"api-key": key})
-    context = _tls_context()
+    context = _build_tls_context("AZURE_SEARCH_INSECURE_TLS", "AZURE_INSECURE_TLS")
     with request.urlopen(req, timeout=30, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
         schema = json.loads(body)
@@ -661,7 +818,7 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
     elif "id" in by_name:
         key_field = "id"
     else:
-        return [], "No key field found in search index schema."
+        return [], "Kein Key-Feld im Azure-Index gefunden."
 
     configured_content = os.getenv("AZURE_SEARCH_CONTENT_FIELD", "")
     content_priorities = [configured_content, "content", "text", "summary", "body", "chunk", "message"]
@@ -676,18 +833,12 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
                 content_field = sf
                 break
     if not content_field:
-        return [], "No suitable content field (Edm.String) found in search index schema."
+        return [], "Kein geeignetes Content-Feld (Edm.String) im Azure-Index gefunden."
 
     title_field = "title" if "title" in by_name else ("name" if "name" in by_name else "")
     topic_field = "topic" if "topic" in by_name else ("category" if "category" in by_name else "")
-    path_field = "path" if "path" in by_name else ""
     source_field = "source_path" if "source_path" in by_name else ("source" if "source" in by_name else "")
     created_field = "created_at" if "created_at" in by_name else ("timestamp" if "timestamp" in by_name else "")
-    doc_type_field = "doc_type" if "doc_type" in by_name else ""
-    chapter_field = "chapter" if "chapter" in by_name else ""
-    blob_name_field = "blob_name" if "blob_name" in by_name else ""
-    tags_field = "tags" if "tags" in by_name else ""
-    eu_ai_act_refs_field = "eu_ai_act_refs" if "eu_ai_act_refs" in by_name else ""
     repo_scope_field = "repo_scope" if "repo_scope" in by_name else ""
     summary_type_field = "summary_type" if "summary_type" in by_name else ""
     source_repo_field = "source_repo" if "source_repo" in by_name else ""
@@ -696,48 +847,16 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
     for s in index.get("session_summaries", []):
         sid = s.get("id") or _slugify(s.get("path", "summary"))
         bullets = s.get("summary_bullets", [])
-        decisions = s.get("decisions", []) or []
-        next_steps = s.get("next_steps", []) or []
-        path_value = s.get("path", "")
-        topic_value = s.get("topic", "general")
-        tags_value = s.get("tags", []) or []
-        chapter_value = (path_value.split("/", 1)[0] if path_value else "") or s.get("target_folder", "")
-        eu_ai_act_refs = s.get("eu_ai_act_refs", []) or []
-
-        content_parts = []
-        if s.get("title"):
-            content_parts.append(str(s["title"]))
-        if bullets:
-            content_parts.extend(f"- {b}" for b in bullets)
-        if decisions:
-            content_parts.append("Decisions:")
-            content_parts.extend(f"- {d}" for d in decisions)
-        if next_steps:
-            content_parts.append("Next steps:")
-            content_parts.extend(f"- {n}" for n in next_steps)
-        content = "\n".join(content_parts).strip()
-
+        content = "\n".join(f"- {b}" for b in bullets)
         doc = {"@search.action": "mergeOrUpload", key_field: sid, content_field: content}
         if title_field:
             doc[title_field] = s.get("title", "Session Summary")
         if topic_field:
-            doc[topic_field] = topic_value
-        if path_field:
-            doc[path_field] = path_value
+            doc[topic_field] = s.get("topic", "general")
         if source_field:
-            doc[source_field] = path_value
+            doc[source_field] = s.get("path", "")
         if created_field:
             doc[created_field] = s.get("created_at", "")
-        if doc_type_field:
-            doc[doc_type_field] = "session_summary"
-        if chapter_field:
-            doc[chapter_field] = chapter_value
-        if blob_name_field:
-            doc[blob_name_field] = path_value
-        if tags_field:
-            doc[tags_field] = ", ".join(str(tag) for tag in tags_value if str(tag).strip())
-        if eu_ai_act_refs_field:
-            doc[eu_ai_act_refs_field] = ", ".join(str(ref) for ref in eu_ai_act_refs if str(ref).strip())
         if repo_scope_field:
             doc[repo_scope_field] = s.get("repo_scope", "")
         if summary_type_field:
@@ -746,7 +865,7 @@ def _summary_docs_for_azure(index: dict, schema: dict) -> tuple[list[dict], str]
             doc[source_repo_field] = s.get("source_repo", "")
         docs.append(doc)
 
-    return docs, f"Schema detected: key={key_field}, content={content_field}"
+    return docs, f"Schema erkannt: key={key_field}, content={content_field}"
 
 
 def push_index_to_azure(index: dict) -> tuple[bool, str]:
@@ -757,19 +876,21 @@ def push_index_to_azure(index: dict) -> tuple[bool, str]:
     api_version = os.getenv("AZURE_SEARCH_API_VERSION", "2023-11-01")
 
     if not endpoint or not key or not index_name:
-        return False, "Azure config missing (AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY, AZURE_SEARCH_INDEX)."
+        return False, "Azure-Konfiguration fehlt (AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_ADMIN_KEY, AZURE_SEARCH_INDEX_NAME)."
 
     try:
         schema, _ = _fetch_azure_index_schema(endpoint, key, index_name, api_version)
     except HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        return False, f"Azure HTTP error during schema read {e.code}: {body[:400]}"
+        return False, f"Azure HTTP-Fehler beim Schema-Read {e.code}: {body[:400]}"
     except URLError as e:
-        return False, f"Azure network error during schema read: {e}"
+        hint = _ssl_hint(e)
+        suffix = f" Hinweis: {hint}" if hint else ""
+        return False, f"Azure Netzwerkfehler beim Schema-Read: {e}.{suffix}"
 
     docs, schema_msg = _summary_docs_for_azure(index, schema)
     if not docs:
-        return True, f"{schema_msg} Nothing to upload."
+        return True, f"{schema_msg} Keine Session-Summaries vorhanden oder keine passenden Felder."
 
     url = f"{endpoint}/indexes/{index_name}/docs/index?api-version={api_version}"
     payload = json.dumps({"value": docs}).encode("utf-8")
@@ -781,23 +902,35 @@ def push_index_to_azure(index: dict) -> tuple[bool, str]:
     )
 
     try:
-        context = _tls_context()
+        context = _build_tls_context("AZURE_SEARCH_INSECURE_TLS", "AZURE_INSECURE_TLS")
         with request.urlopen(req, timeout=30, context=context) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-            return True, f"{schema_msg}. Search index updated ({len(docs)} docs). Response: {body[:200]}"
+            return True, f"{schema_msg}. Azure-Index aktualisiert ({len(docs)} Dokumente). Response: {body[:200]}"
     except HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        return False, f"Azure HTTP error {e.code}: {body[:400]}"
+        return False, f"Azure HTTP-Fehler {e.code}: {body[:400]}"
     except URLError as e:
-        return False, f"Azure network error: {e}"
+        hint = _ssl_hint(e)
+        suffix = f" Hinweis: {hint}" if hint else ""
+        return False, f"Azure Netzwerkfehler: {e}.{suffix}"
 
 
 def _blob_container_name() -> str:
     return os.getenv("AZURE_BLOB_CONTAINER", "session-summaries")
 
 
+def _input_blob_container_name() -> str:
+    return os.getenv("AZURE_INPUT_BLOB_CONTAINER", "thesis-input-files")
+
+
 def _list_summary_files() -> list[Path]:
     return sorted(REPO_ROOT.rglob(f"{SUMMARY_DIRNAME}/*.yaml"))
+
+
+def _list_input_files() -> list[Path]:
+    if not INPUT_FILES_DIR.exists():
+        return []
+    return sorted([p for p in INPUT_FILES_DIR.rglob("*") if p.is_file()])
 
 
 def _sha256_file(path: Path) -> str:
@@ -822,6 +955,20 @@ def _write_blob_sync_state(state: dict) -> None:
     BLOB_SYNC_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _load_input_blob_sync_state() -> dict:
+    if not INPUT_BLOB_SYNC_STATE_PATH.exists():
+        return {}
+    try:
+        return json.loads(INPUT_BLOB_SYNC_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_input_blob_sync_state(state: dict) -> None:
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    INPUT_BLOB_SYNC_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def push_summaries_to_blob() -> tuple[bool, str]:
     load_dotenv()
     account = os.getenv("AZURE_STORAGE_ACCOUNT", "")
@@ -829,11 +976,11 @@ def push_summaries_to_blob() -> tuple[bool, str]:
     container = _blob_container_name()
 
     if not account or not key:
-        return False, "Blob config missing (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY)."
+        return False, "Blob-Konfiguration fehlt (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY)."
 
     files = _list_summary_files()
     if not files:
-        return True, "No session summaries found, nothing to upload."
+        return True, "Keine Session-Summaries vorhanden, nichts nach Blob zu pushen."
 
     state = _load_blob_sync_state()
     previous_container = state.get("container") if isinstance(state, dict) else None
@@ -864,23 +1011,21 @@ def push_summaries_to_blob() -> tuple[bool, str]:
         ]
         subprocess.run(create_cmd, check=True, capture_output=True, text=True)
     except FileNotFoundError:
-        return False, "Azure CLI (az) not found."
+        return False, "Azure CLI (az) nicht gefunden."
     except subprocess.CalledProcessError as e:
-        return False, f"Container creation failed: {(e.stderr or e.stdout).strip()[:300]}"
+        return False, f"Container-Erstellung fehlgeschlagen: {(e.stderr or e.stdout).strip()[:300]}"
 
     uploaded = 0
     skipped = 0
     new_synced: dict[str, str] = {}
-
     for file_path in files:
         rel = file_path.relative_to(REPO_ROOT).as_posix()
         file_hash = _sha256_file(file_path)
         new_synced[rel] = file_hash
-
         if synced.get(rel) == file_hash:
             skipped += 1
             continue
-
+        blob_name = rel
         cmd = [
             "az",
             "storage",
@@ -897,7 +1042,7 @@ def push_summaries_to_blob() -> tuple[bool, str]:
             "--file",
             str(file_path),
             "--name",
-            rel,
+            blob_name,
             "--overwrite",
             "true",
             "--output",
@@ -907,7 +1052,7 @@ def push_summaries_to_blob() -> tuple[bool, str]:
             subprocess.run(cmd, check=True, capture_output=True, text=True)
             uploaded += 1
         except subprocess.CalledProcessError as e:
-            return False, f"Blob upload failed ({rel}): {(e.stderr or e.stdout).strip()[:300]}"
+            return False, f"Blob-Upload fehlgeschlagen ({rel}): {(e.stderr or e.stdout).strip()[:300]}"
 
     _write_blob_sync_state(
         {
@@ -916,5 +1061,104 @@ def push_summaries_to_blob() -> tuple[bool, str]:
             "synced_hashes": new_synced,
         }
     )
+    return True, (
+        f"Blob-Sync erfolgreich: {uploaded} hochgeladen, {skipped} unveraendert "
+        f"(Container '{container}')."
+    )
 
-    return True, f"Blob sync OK: {uploaded} uploaded, {skipped} unchanged (container '{container}')."
+
+def push_input_files_to_blob() -> tuple[bool, str]:
+    load_dotenv()
+    account = os.getenv("AZURE_STORAGE_ACCOUNT", "")
+    key = os.getenv("AZURE_STORAGE_KEY", "")
+    container = _input_blob_container_name()
+
+    if not account or not key:
+        return False, "Blob-Konfiguration fehlt (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY)."
+
+    files = _list_input_files()
+    if not files:
+        return True, f"Keine Input-Dateien vorhanden in '{INPUT_FILES_DIR.relative_to(REPO_ROOT)}'."
+
+    state = _load_input_blob_sync_state()
+    previous_container = state.get("container") if isinstance(state, dict) else None
+    synced = state.get("synced_hashes", {}) if isinstance(state, dict) else {}
+    if not isinstance(synced, dict):
+        synced = {}
+    if previous_container and previous_container != container:
+        synced = {}
+
+    try:
+        create_cmd = [
+            "az",
+            "storage",
+            "container",
+            "create",
+            "--name",
+            container,
+            "--account-name",
+            account,
+            "--account-key",
+            key,
+            "--auth-mode",
+            "key",
+            "--output",
+            "none",
+        ]
+        subprocess.run(create_cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        return False, "Azure CLI (az) nicht gefunden."
+    except subprocess.CalledProcessError as e:
+        return False, f"Container-Erstellung fehlgeschlagen: {(e.stderr or e.stdout).strip()[:300]}"
+
+    uploaded = 0
+    skipped = 0
+    new_synced: dict[str, str] = {}
+    prefix = INPUT_FILES_DIR.relative_to(REPO_ROOT).as_posix()
+    for file_path in files:
+        rel = file_path.relative_to(REPO_ROOT).as_posix()
+        file_hash = _sha256_file(file_path)
+        new_synced[rel] = file_hash
+        if synced.get(rel) == file_hash:
+            skipped += 1
+            continue
+        blob_name = f"{prefix}/{file_path.relative_to(INPUT_FILES_DIR).as_posix()}"
+        cmd = [
+            "az",
+            "storage",
+            "blob",
+            "upload",
+            "--container-name",
+            container,
+            "--account-name",
+            account,
+            "--account-key",
+            key,
+            "--auth-mode",
+            "key",
+            "--file",
+            str(file_path),
+            "--name",
+            blob_name,
+            "--overwrite",
+            "true",
+            "--output",
+            "none",
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            uploaded += 1
+        except subprocess.CalledProcessError as e:
+            return False, f"Blob-Upload fehlgeschlagen ({rel}): {(e.stderr or e.stdout).strip()[:300]}"
+
+    _write_input_blob_sync_state(
+        {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "container": container,
+            "synced_hashes": new_synced,
+        }
+    )
+    return True, (
+        f"Input-Blob-Sync erfolgreich: {uploaded} hochgeladen, {skipped} unveraendert "
+        f"(Container '{container}')."
+    )

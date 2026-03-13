@@ -1,0 +1,17 @@
+{
+  "skill_name": "thesis-writer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "GO — schreib den ersten Absatz für Kap. 2.1 (Grundlagen MLOps)",
+      "expected_output": "Ein akademischer Absatz mit APA7-Zitationen (inkl. Seitenangaben), gefolgt von einem Prüfprotokoll mit BELEG/CLAIM/MATCH Tabelle und BILANZ-Block",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "nächster absatz — jetzt zum Thema Quality Gates in CI/CD Pipelines",
+      "expected_output": "Absatz mit korrekter Terminologie (Quality Gate = automatisiert, evidenzbasiert), Prüfprotokoll, Deployer-Scope gewahrt, Wortanzahl-Update",
+      "files": []
+    }
+  ]
+}
