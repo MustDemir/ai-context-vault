@@ -1,6 +1,6 @@
 # AI Context Vault
 
-**A reusable toolkit for turning AI sessions into structured, searchable project artifacts — plus a complete thesis-writing orchestration system built on top.**
+**A reusable toolkit for turning AI sessions into structured, searchable project artifacts — plus a thesis-writing support system built on top.**
 
 > This repo packages a workflow I originally built in a thesis setting into a reusable toolkit. The core problem was stable across projects: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for knowledge-intensive AI work.
 
@@ -21,9 +21,9 @@
 - Built `docs/thesis_state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
 ### Thesis-Writing Orchestration (6-Skill Plugin System)
-- Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that orchestrates the entire academic writing process — from pre-flight checks through writing to post-session verification.
+- Designed and implemented a **6-skill Cowork plugin** (`thesis-workflow`) that supports the academic writing process — from pre-flight checks through guided drafting support to post-session verification.
 - Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
-- Implemented **automated quality assurance** with 7 consistency dimensions, academic reviewer simulation (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for every paragraph.
+- Implemented **automated quality assurance** with 7 consistency dimensions, academic reviewer simulation (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
 - Integrated **university requirements as code**: Prof. Prinz style rules and SRH grading criteria codified as enforceable checks across all workflow skills.
 - Created **CI/CD for academic writing**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
 
@@ -90,17 +90,17 @@ I combined **3 established best practices** from research into one toolkit:
 
 ---
 
-## Thesis-Writing Plugin: 6-Skill Orchestration
+## Thesis-Writing Plugin: 6-Skill Support Layer
 
-Built on top of the core toolkit, I developed a **Cowork plugin** that orchestrates the entire thesis-writing process for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
+Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis-writing process for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
 
 ### The 6 Skills
 
 | # | Skill | Trigger | What It Does |
 |---|-------|---------|-------------|
-| 1 | **thesis-session-manager** | "neue session", "resume" | Orchestrates start → preflight → writing → post-session |
+| 1 | **thesis-session-manager** | "neue session", "resume" | Orchestrates start → preflight → writing support → post-session |
 | 2 | **thesis-preflight** | "preflight", "GO vorbereiten" | P0 (lade_manifest) + P1–P6: Expose, chapter texts, sessions, decisions, sources, university requirements |
-| 3 | **thesis-writer** | "GO", "FINAL" | Paragraph-by-paragraph writing with BELEG/CLAIM/MATCH proof protocols, APA7 enforcement |
+| 3 | **thesis-writer** | "GO", "FINAL" | Paragraph-level writing support with BELEG/CLAIM/MATCH proof protocols and APA7 enforcement |
 | 4 | **thesis-reviewer** | "review kapitel", "gutachten" | Academic reviewer simulation: R1–R6 scoring (SRH 50/30/20 criteria) |
 | 5 | **thesis-consistency** | "konsistenz pruefen" | 7 consistency dimensions: terminology, red thread, budget, forward refs, drift, cross-chapter, university |
 | 6 | **thesis-post-session** | "fertig fuer heute" | 6-point verification (A–F): artifacts, chapter_state, summary, decisions, diff, expose delta |
@@ -184,7 +184,7 @@ flowchart TB
     end
 
     CHAT -->|"Work in AI session"| GIT
-    SKILLS -->|"Orchestrate writing"| CHAT
+    SKILLS -->|"Support writing workflow"| CHAT
     GIT -->|"reindex.py"| BLOB
     BLOB -->|"auto-index"| SEARCH
     SEARCH -->|"search.py"| CHAT
@@ -213,13 +213,13 @@ sequenceDiagram
     Scripts-->>User: compact context + lade_manifest dependencies
     User->>AI: Continue working
 
-    Note over User,Azure: THESIS WRITING (Skill-Orchestrated)
+    Note over User,Azure: THESIS WRITING SUPPORT
     User->>Skills: "preflight Kap. 5.4"
     Skills->>Skills: P0 lade_manifest → P1–P6 checks
     Skills-->>User: Preflight protocol + checklist
     User->>Skills: "GO"
-    Skills->>Skills: Paragraph-by-paragraph with BELEG/CLAIM/MATCH
-    Skills-->>User: Draft with proof protocols
+    Skills->>Skills: Paragraph-level guidance + BELEG/CLAIM/MATCH checks
+    Skills-->>User: Drafting support + proof protocol
 
     Note over User,Azure: INTELLIGENT SAVE
     User->>AI: "fertig fuer heute"
@@ -485,7 +485,7 @@ The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern*
 
 ## Use Cases
 
-- **Thesis Management** – Track requirements, gates, progress across chapters with 6 orchestrated skills
+- **Thesis Management** – Track requirements, gates, progress across chapters with 6 supporting skills
 - **Intelligent Save** – `save.py` creates compact summary YAML, routes it, and syncs
 - **Multi-Model Projects** – Shared knowledge base across Claude, ChatGPT, Gemini via Azure
 - **Compliance Documentation** – Git-versioned evidence chain (EU AI Act, ISO 42001)
@@ -510,4 +510,4 @@ MIT License – see [LICENSE](LICENSE)
 
 ---
 
-*Built with Azure, Claude API, Python, and Cowork. I recognized a problem in my AI workflow, researched how established best practices could solve it, and implemented a toolkit with a thesis-writing orchestration layer on top. It's research-backed engineering, not reinventing the wheel.*
+*Built with Azure, Claude API, Python, and Cowork. I recognized a problem in my AI workflow, researched how established best practices could solve it, and implemented a toolkit with a thesis-writing support layer on top. It's research-backed engineering, not reinventing the wheel.*
