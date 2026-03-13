@@ -1,6 +1,6 @@
 # AI Context Vault
 
-**A reusable toolkit for turning AI sessions into structured, searchable project artifacts — plus a thesis workflow support system built on top.**
+**A reusable toolkit for turning AI sessions into structured, searchable project artifacts**
 
 > This repo packages a workflow I originally built in a thesis setting into a reusable toolkit. The core problem was stable across projects: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for knowledge-intensive AI work.
 
@@ -18,12 +18,12 @@
 - Implemented one-command session persistence with auto-routing (`save.py`) and resumable context (`resume.py`).
 - Added cloud synchronization and retrieval (`reindex.py`, AI Search, Blob Storage) for cross-session continuity.
 - Integrated robust fallback summarization paths (Claude → Azure OpenAI → local rules).
-- Built `docs/thesis_state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
+- Built ` a __state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
 ### Thesis Workflow Orchestration
-- Designed and implemented a **multi-stage Cowork plugin** (`thesis-workflow`) that supports the academic thesis workflow — from pre-flight checks through guided drafting and revision support to post-session verification.
+- Designed and implemented a **multi-stage Cowork plugin** (`***-workflow`) that supports the every workflow — from pre-flight checks through guided drafting and revision support to post-session verification.
 - Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
-- Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (SRH 50/30/20 scoring), and BELEG/CLAIM/MATCH proof protocols for paragraph-level support and verification.
+- Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (scoring system) and  proof protocols for support and verification.
 - Created **CI/CD**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
 
 ### Cloud & DevOps
@@ -43,9 +43,9 @@ Working on complex AI projects across multiple models and sessions, I discovered
 AI models (Claude Projects, ChatGPT Memory, Gemini Workspace) remember conversations well. But they store **files, not manageable artifacts**.
 
 After 20 sessions, I had:
-- Hundreds of messages scattered across chats
-- Decisions, requirements, quality gates buried in threads
-- No way to query "all approved requirements" or "all open gates"
+- 100rds of messages scattered across chats
+- Decisions, requirements and more buried in threads
+- No way to query "all approved requirements" or "all open gates" and problem
 - No structured overview
 
 > **Literature says:** Cloud-based artifact management with structure (not just files) improves collaboration in distributed teams (Schlegel & Sattler, 2022; Gaikwad, 2024).
@@ -53,9 +53,9 @@ After 20 sessions, I had:
 ### PD2: Isolated Knowledge Silos
 
 ```
-Claude Projects    → only accessible in Claude
-ChatGPT Memory     → only accessible in ChatGPT
-Gemini Workspace   → only accessible in Gemini
+Claude Projects/Cowork  → only accessible in Claude
+ChatGPT Memory          → only accessible in ChatGPT
+Gemini Workspace        → only accessible in Gemini
 ```
 
 My knowledge was **fragmented** – no shared layer across models.
@@ -93,7 +93,7 @@ I combined **3 established best practices** from research into one toolkit:
 
 Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis workflow for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
 
-The human author remains responsible for argumentation, wording, and the final submitted text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.
+**The human author remains responsible for argumentation, wording, and the submitted text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.**
 
 ### Core Capabilities
 
