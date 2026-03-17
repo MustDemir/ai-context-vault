@@ -10,10 +10,16 @@ flowchart LR
     E --> G["Next Session<br/>focused working context"]
     F --> H["search.py<br/>selective retrieval"]
     H --> G
+    T["Additional Toolkit Scripts<br/>create_index.py<br/>extract_yamls.py<br/>reindex.py<br/>update_progress.py<br/>validate_structure.py<br/>workflow_smoke.py<br/>weekly_audit.py<br/>weekly_branch_drift.py"]:::toolbox
+
+    T -. supports .-> B
+    T -. supports .-> C
+    T -. supports .-> F
 
     classDef core fill:#eef6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#0f172a;
     classDef local fill:#f0fdf4,stroke:#16a34a,stroke-width:1.5px,color:#0f172a;
     classDef cloud fill:#fff7ed,stroke:#ea580c,stroke-width:1.5px,color:#0f172a;
+    classDef toolbox fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a;
 
     class A,B,C,D core;
     class E,G,H local;
@@ -27,3 +33,4 @@ flowchart LR
 - Git preserves auditability and change history
 - Azure Blob Storage and Azure AI Search are optional for backup, sync, and retrieval
 - `search.py` returns only relevant context to the next session
+- additional scripts support indexing, validation, progress updates, and repo maintenance
