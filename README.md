@@ -1,8 +1,8 @@
 # AI Context Vault
 
-**A reusable toolkit for turning AI sessions into structured, searchable project artifacts**
+**A reusable context-engineering toolkit for turning AI sessions into structured, searchable project artifacts**
 
-> This repo packages a workflow I originally built in a thesis setting into a reusable toolkit. The core problem was stable across projects: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for knowledge-intensive AI work.
+> This repo packages a workflow I first developed for a demanding long-running knowledge project into a reusable toolkit. The core problem is stable across AI-assisted work: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for durable, portable AI context management.
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-green.svg)](https://python.org)
@@ -11,7 +11,7 @@
 
 ---
 
-## What I Built (Portfolio Snapshot)
+## What I Built
 
 ### Core Toolkit (AI Context Management)
 - Engineered an AI workflow that turns long chats into compact, structured YAML artifacts.
@@ -20,11 +20,11 @@
 - Integrated robust fallback summarization paths (Claude → Azure OpenAI → local rules).
 - Built ` a __state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
 
-### Thesis Workflow Orchestration
-- Designed and implemented a **multi-stage Cowork plugin** (`***-workflow`) that supports the every workflow — from pre-flight checks through guided drafting and revision support to post-session verification.
-- Built a **per-chapter dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only) — reducing AI context window consumption while maintaining cross-chapter consistency.
-- Implemented **automated consistency and compliance checks** with 7 consistency dimensions, rubric-based review support (scoring system) and  proof protocols for support and verification.
-- Created **CI/CD**: GitHub Actions for structure validation, weekly audits, branch drift detection, and automated progress tracking.
+### Structured Work Support Layer
+- Designed and implemented a **multi-stage Cowork plugin** (`thesis-workflow.plugin`) for preflight checks, guided drafting, review support, and post-session verification.
+- Built a **dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only), reducing context-window consumption while preserving cross-document consistency.
+- Implemented **consistency and compliance checks** with 7 consistency dimensions, rubric-based review support, and proof protocols for support and verification.
+- Added **CI smoke coverage** and maintenance automation for structure validation, weekly audits, branch drift detection, and progress tracking.
 
 ### Cloud & DevOps
 - Productionized multi-repo isolation with dedicated Blob containers to prevent cross-project context mixing.
@@ -89,11 +89,11 @@ I combined **3 established best practices** from research into one toolkit:
 
 ---
 
-## Thesis Workflow Support Layer
+## Structured Writing And Review Support Layer
 
-Built on top of the core toolkit, I developed a **Cowork plugin** that supports the thesis workflow for my Master's thesis (GenAIOps Reference Architecture with Quality Gates, Design Science Research).
+Built on top of the core toolkit, I developed a **Cowork plugin** for long-form structured writing and review workflows.
 
-**The human author remains responsible for argumentation, wording, and the submitted text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.**
+**The human author remains responsible for argumentation, wording, and the final text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.**
 
 ### Core Capabilities
 
@@ -108,7 +108,7 @@ Built on top of the core toolkit, I developed a **Cowork plugin** that supports 
 Session Start → preparation → drafting support → review/consistency checks → post-session verification → save.py
 ```
 
-### lade_manifest: Per-Chapter Dependency Management
+### lade_manifest: Dependency Management For Focused Context Loading
 
 Each chapter declares its dependencies in `chapter_state.yaml`:
 
@@ -122,7 +122,7 @@ lade_manifest:
     - "05_referenzarchitektur_RQ2"
 ```
 
-**Universal pflicht files** (loaded for every chapter): DSR methodology (Kap. 3 DOCX) + university requirements (`pruefkatalog.md`).
+**Universal pflicht files** can be loaded for every work area where fixed reference material must remain in scope.
 
 This system supplements (never replaces) existing checks — all workflow stages read the manifest before execution.
 
@@ -160,7 +160,7 @@ flowchart TB
         direction TB
         GIT["Git Repository\n(YAML + Markdown)"]
         CHAT["AI Chat Session\n(Claude, ChatGPT, etc.)"]
-        SKILLS["Cowork Plugin\nThesis Support Stages"]
+        SKILLS["Cowork Plugin\nSupport Stages"]
     end
 
     subgraph AZURE["Azure Cloud"]
@@ -178,7 +178,7 @@ flowchart TB
     end
 
     CHAT -->|"Work in AI session"| GIT
-    SKILLS -->|"Support thesis workflow"| CHAT
+    SKILLS -->|"Support structured workflow"| CHAT
     GIT -->|"reindex.py"| BLOB
     BLOB -->|"auto-index"| SEARCH
     SEARCH -->|"search.py"| CHAT
@@ -289,11 +289,11 @@ python3 scripts/reindex.py --azure --blob
 python3 scripts/search.py "what are the compliance requirements?"
 ```
 
-### 4. Install Thesis Plugin (for Cowork/Claude Desktop)
+### 4. Install Support Plugin (optional, for Cowork/Claude Desktop)
 
 ```bash
 # The plugin file is in plugins/
-# Install via Cowork: drag plugins/thesis-workflow_v3.plugin into Cowork
+# Install via Cowork: drag plugins/thesis-workflow.plugin into Cowork
 ```
 
 ---
@@ -330,11 +330,11 @@ ai-context-vault/
 │   ├── weekly_audit.py     # Weekly GitHub Issue audit (structure, stale files)
 │   ├── weekly_branch_drift.py  # Branch drift snapshot
 │   ├── workflow_smoke.py   # Local workflow smoke tests
-│   └── generate_diagrams.py   # Thesis diagram generation (Pillow)
-├── skills/                    # Thesis workflow skill definitions and references
+│   └── generate_diagrams.py   # Diagram generation helpers
+├── skills/                    # Workflow skill definitions and references
 │   └── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
 ├── plugins/
-│   └── thesis-workflow_v3.plugin  # Installable Cowork plugin (ZIP)
+│   └── thesis-workflow.plugin     # Installable Cowork plugin (ZIP)
 ├── legacy/                    # Archived plugin/scripts snapshots from older workflow versions
 ├── docs/
 │   ├── ARCHITECTURE.md        # Design decisions
@@ -473,7 +473,7 @@ The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern*
 
 ## Use Cases
 
-- **Thesis Management** – Track requirements, gates, progress, and review steps across chapters
+- **Long-Form Writing Projects** – Track requirements, gates, progress, and review steps across structured work packages
 - **Intelligent Save** – `save.py` creates compact summary YAML, routes it, and syncs
 - **Multi-Model Projects** – Shared knowledge base across Claude, ChatGPT, Gemini via Azure
 - **Compliance Documentation** – Git-versioned evidence chain (EU AI Act, ISO 42001)
@@ -498,4 +498,4 @@ MIT License – see [LICENSE](LICENSE)
 
 ---
 
-*Built with Azure, Claude API, Python, and Cowork. I recognized a problem in my AI workflow, researched how established best practices could solve it, and implemented a toolkit with a thesis workflow support layer on top. It's research-backed engineering, not reinventing the wheel.*
+*Built with Azure, Claude API, Python, and Cowork. I recognized a recurring problem in AI-assisted work, mapped it to established best practices, and implemented a reusable toolkit for structured context management and cross-session continuity.*
