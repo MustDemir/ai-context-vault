@@ -1,0 +1,23 @@
+{
+  "skill_name": "evidence-matrix-builder",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Erstell mir bitte eine Evidenz-Matrix für Kap. 2.4.2 EU AI Act. Die PDFs liegen in 02_04_02_EU_AI_Act_und_technisch_organisatorische_Anforderungen. Es sollen 2 substanzielle Absätze + Brückensatz rauskommen, Budget ~450W.",
+      "expected_output": "Markdown + HTML Evidenz-Matrix mit Q1-Q7 Fragen, Tier-1/2/3-Kategorisierung, Synthese-Mapping, Evidenzstärke-Analyse",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Ich muss Kap. 2.5 Quality Gates schreiben. Welche meiner Quellen decken Quality Gates, Stage-Gate und Checkpoint-Konzepte ab? Scann mal den PDF-Ordner 01_Kap2_Theoretische_Grundlagen dafür.",
+      "expected_output": "Evidenz-Matrix mit neuen kapitelspezifischen Fragen (Quality-Gate-Definition, Stage-Gate-Modelle, CI/CD-Integration etc.), angepasste Tiers, Synthese",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "zeig mir die quellen abdeckung für kapitel 4.6 requirements katalog — ich brauch ne matrix welche papers die requirements dimensionen abdecken. pdfs sind im ordner 04_anforderungsanalyse",
+      "expected_output": "Evidenz-Matrix mit Requirements-spezifischen Fragen, informeller Eingabe wird zu strukturiertem Output transformiert",
+      "files": []
+    }
+  ]
+}

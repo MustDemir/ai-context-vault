@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evidenz-Matrix {{KAPITEL}} — {{TITEL}}</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-muted: #8b8fa3;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --orange: #f97316;
+    --red: #ef4444;
+    --gray: #374151;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 0.95rem; font-weight: 600; margin: 16px 0 8px; }
+  .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .badge-core { background: #6366f120; color: var(--accent); border: 1px solid #6366f140; }
+  .badge-rec { background: #22c55e15; color: var(--green); border: 1px solid #22c55e30; }
+  .badge-reserved { background: #37415120; color: var(--text-muted); border: 1px solid var(--border); }
+
+  /* Stats bar */
+  .stats { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 120px; }
+  .stat-num { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.75rem; color: var(--text-muted); }
+
+  /* Question cards */
+  .q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .q-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .q-id { font-weight: 700; color: var(--accent); font-size: 0.8rem; }
+  .q-text { font-size: 0.85rem; margin-top: 4px; }
+  .q-target { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+
+  /* Matrix table */
+  .matrix-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  th { background: var(--surface); position: sticky; top: 0; z-index: 2; }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; }
+  td:first-child, td:nth-child(2) { text-align: left; white-space: nowrap; }
+  th:first-child, th:nth-child(2) { text-align: left; }
+  .cell-deep { background: #22c55e18; color: var(--green); font-weight: 700; }
+  .cell-mod { background: #f9731612; color: var(--orange); }
+  .cell-mention { background: #eab30810; color: var(--yellow); }
+  .cell-none { color: var(--gray); }
+  .source-name { font-weight: 600; font-size: 0.8rem; }
+  .source-year { color: var(--text-muted); }
+  .role-cell { font-size: 0.75rem; color: var(--text-muted); text-align: left !important; max-width: 180px; white-space: normal; }
+
+  /* Evidence strength */
+  .ev-bar { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+  .ev-dot { width: 10px; height: 10px; border-radius: 2px; }
+  .ev-strong { background: var(--green); }
+  .ev-moderate { background: var(--orange); }
+  .ev-weak { background: var(--yellow); }
+  .ev-label { font-size: 0.75rem; color: var(--text-muted); margin-left: 4px; }
+
+  /* Synthesis table */
+  .synth-table td { text-align: left; font-size: 0.8rem; }
+  .synth-table td:first-child { font-weight: 500; min-width: 200px; }
+
+  /* Callout */
+  .callout { margin-top: 32px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; border-left: 4px solid var(--accent); }
+  .callout h3 { margin: 0 0 8px; }
+  .callout p { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
+</style>
+</head>
+<body>
+
+<!-- TEMPLATE: Alle {{PLATZHALTER}} werden vom Skill ersetzt -->
+<!-- Wenn kein Script verfügbar: manuell die Sektionen befüllen -->
+
+<h1>📊 Evidenz-Matrix — {{KAPITEL}}</h1>
+<div class="subtitle">{{TITEL}} · Elicit-Style Research Table · {{DATUM}}</div>
+
+<div class="stats">
+  <div class="stat-card"><div class="stat-num">{{N_PDFS}}</div><div class="stat-label">PDFs gescannt</div></div>
+  <div class="stat-card"><div class="stat-num">{{N_TIER12}}</div><div class="stat-label">Tier 1+2 Quellen</div></div>
+  <div class="stat-card"><div class="stat-num">{{N_QUESTIONS}}</div><div class="stat-label">Extraktionsfragen</div></div>
+  <div class="stat-card"><div class="stat-num">{{N_CELLS}}</div><div class="stat-label">Zellen bewertet</div></div>
+  <div class="stat-card"><div class="stat-num">{{BUDGET}}</div><div class="stat-label">Budget</div></div>
+</div>
+
+<h2>Spalten: Extraktionsfragen für {{KAPITEL}}</h2>
+<div class="q-grid">
+  <!-- PRO FRAGE EINE KARTE: -->
+  <!--
+  <div class="q-card">
+    <div class="q-id">Q1</div>
+    <div class="q-text">Frage mit <strong>Schlüsselbegriff</strong>?</div>
+    <div class="q-target">→ Absatz X: Thema</div>
+  </div>
+  -->
+  {{QUESTION_CARDS}}
+</div>
+
+<h2>Evidenz-Matrix: Tier 1 — CORE-Quellen</h2>
+<div class="matrix-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Quelle</th>
+      {{QUESTION_HEADERS}}
+      <th>Rolle in {{KAPITEL}}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{TIER1_ROWS}}
+  </tbody>
+</table>
+</div>
+
+<h2>Evidenz-Matrix: Tier 2 — Empfohlene Quellen</h2>
+<div class="matrix-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>#</th><th>Quelle</th>
+      {{QUESTION_HEADERS}}
+      <th>Rolle in {{KAPITEL}}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{TIER2_ROWS}}
+  </tbody>
+</table>
+</div>
+
+<h2>Evidenzstärke pro Frage</h2>
+<table>
+  <thead><tr><th>Frage</th><th>Stärke</th><th>🟢 Tief</th><th>🟠 Moderat</th><th>🟡 Erwähnt</th><th>Absatz-Zuordnung</th></tr></thead>
+  <tbody>
+    {{EVIDENCE_STRENGTH_ROWS}}
+  </tbody>
+</table>
+
+<h2>Synthese: Quellen → Absätze</h2>
+<div class="matrix-wrap">
+<table class="synth-table">
+  <thead><tr><th>Absatz</th><th>Aussage</th><th>Primärquelle</th><th>Sekundärquelle</th></tr></thead>
+  <tbody>
+    {{SYNTHESIS_ROWS}}
+  </tbody>
+</table>
+</div>
+
+<h2>⚠ Scope-Drift-Kontrolle: Tier 3 — RESERVIERT</h2>
+<div class="matrix-wrap">
+<table>
+  <thead><tr><th>#</th><th>Quelle</th><th>Ziel-Kapitel</th><th>Begründung</th></tr></thead>
+  <tbody>
+    {{TIER3_ROWS}}
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <h3>📌 Nächster Schritt</h3>
+  <p>{{NEXT_STEP}}</p>
+</div>
+
+</body>
+</html>

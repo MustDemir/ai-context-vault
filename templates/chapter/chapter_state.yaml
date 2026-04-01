@@ -1,0 +1,42 @@
+# Chapter State Template
+# Jedes Kapitel bekommt eine eigene chapter_state.yaml im Kapitelordner.
+# Wird von resume.py aggregiert und von allen Skills gelesen.
+
+chapter: "01_einleitung"              # Ordnername
+kapitel: "Kapitel 1 — Einleitung"     # Beschreibender Titel
+status: planned                        # planned | in_progress | draft | review | final
+progress: 0                           # 0-100
+current_focus: ""                      # 1-Zeiler: was steht als naechstes an
+last_sync: "2026-01-01"               # ISO-Datum der letzten Aktualisierung
+
+# lade_manifest: Dependency-Management fuer fokussierte Kontext-Ladung
+lade_manifest:
+  pflicht:                             # Als Volltext laden (hohe Prioritaet)
+    - "docs/uni_vorgaben/pruefkatalog.md"
+    # - "00_workspace/Fulltext_Kapitel/<Kapitel>.docx"
+  kontext:                             # Nur chapter_state laden (Metadaten)
+    # - "02_theorie"
+    # - "03_methodik"
+
+done:                                  # Erledigte Meilensteine
+  # - "Abschnitt X.Y fertiggestellt"
+
+decisions:                             # Entscheidungsregister
+  # - id: "D01"
+  #   decision: "Beschreibung der Entscheidung"
+  #   date: "2026-01-01"
+  #   rationale: "Begruendung"
+
+open_items:                            # Offene Punkte / Blocker
+  # - "Beschreibung des offenen Punkts"
+
+next_steps:                            # Geplante naechste Schritte
+  # - "Naechster Schritt"
+
+key_sources:                           # Wichtigste Quellen fuer dieses Kapitel
+  # - "Autor (Jahr) — Kurzbeschreibung"
+
+cross_chapter_dependencies:            # Abhaengigkeiten zu anderen Kapiteln
+  # - from: "2.4"
+  #   to: "4.3"
+  #   type: "forward_reference"

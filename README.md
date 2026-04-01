@@ -1,315 +1,112 @@
 # AI Context Vault
 
-**A reusable context-engineering toolkit for turning AI sessions into structured, searchable project artifacts**
-
-> This repo packages a workflow I first developed for a demanding long-running knowledge project into a reusable toolkit. The core problem is stable across AI-assisted work: **unstructured artifacts, isolated knowledge, and no audit trail**. The result is not a generic chat wrapper, but a research-informed engineering pattern for durable, portable AI context management.
+**Context engineering toolkit for structured, searchable AI-assisted project work**
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-green.svg)](https://python.org)
 [![Azure](https://img.shields.io/badge/Azure-Blob%20%2B%20AI%20Search-0078D4.svg)](https://azure.microsoft.com)
-[![Academic Research](https://img.shields.io/badge/Based%20On-Academic%20Research-blue)](docs/ACADEMIC_VALIDATION.md)
 
 ---
 
-## What I Built
+## What This Is
 
-### Core Toolkit (AI Context Management)
-- Engineered an AI workflow that turns long chats into compact, structured YAML artifacts.
-- Implemented one-command session persistence with auto-routing (`save.py`) and resumable context (`resume.py`).
-- Added cloud synchronization and retrieval (`reindex.py`, AI Search, Blob Storage) for cross-session continuity.
-- Integrated robust fallback summarization paths (Claude → Azure OpenAI → local rules).
-- Built ` a __state.md` as a generated SSOT (Single Source of Truth) snapshot from chapter states.
+A toolkit that turns AI chat sessions into structured, versioned, searchable artifacts. Built to solve three recurring problems in long-running AI-assisted projects: unstructured outputs, isolated knowledge silos across models, and missing audit trails.
 
-### Structured Work Support Layer
-- Designed and implemented a **multi-stage Cowork plugin** (`thesis-workflow.plugin`) for preflight checks, guided drafting, review support, and post-session verification.
-- Built a **dependency management system** (`lade_manifest`) with 2-tier context loading: `pflicht` (fulltext) and `kontext` (metadata only), reducing context-window consumption while preserving cross-document consistency.
-- Implemented **consistency and compliance checks** with 7 consistency dimensions, rubric-based review support, and proof protocols for support and verification.
-- Added **CI smoke coverage** and maintenance automation for structure validation, weekly audits, branch drift detection, and progress tracking.
+The repo contains CLI scripts for session persistence and cloud sync, a plugin system with custom Cowork skills for workflow support, and MCP connector integrations for academic research tooling.
 
-### Cloud & DevOps
-- Productionized multi-repo isolation with dedicated Blob containers to prevent cross-project context mixing.
-- Implemented SHA-256 change detection for incremental Blob sync (skip unchanged files).
-- Built semantic search (Azure AI Search + Claude RAG) across all sessions with repo-scoped filtering.
-- Automated README progress bars via `update_progress.py` triggered by session saves.
+**Core use case:** Daily workflow support for a DSR master's thesis — session management, evidence handling, consistency checks, and structured quality assurance across 100+ sessions.
 
 ---
 
-## The Problem
-
-Working on complex AI projects across multiple models and sessions, I discovered **3 concrete problems** that modern AI platforms don't solve:
-
-### PD1: Unstructured Artifacts
-
-AI models (Claude Projects, ChatGPT Memory, Gemini Workspace) remember conversations well. But they store **files, not manageable artifacts**.
-
-After 20 sessions, I had:
-- 100rds of messages scattered across chats
-- Decisions, requirements and more buried in threads
-- No way to query "all approved requirements" or "all open gates" and problem
-- No structured overview
-
-> **Literature says:** Cloud-based artifact management with structure (not just files) improves collaboration in distributed teams (Schlegel & Sattler, 2022; Gaikwad, 2024).
-
-### PD2: Isolated Knowledge Silos
+## Architecture
 
 ```
-Claude Projects/Cowork  → only accessible in Claude
-ChatGPT Memory          → only accessible in ChatGPT
-Gemini Workspace        → only accessible in Gemini
+┌──────────────────────────────────────────────────┐
+│               Local Machine                       │
+│                                                   │
+│  Git Repo (YAML + MD) ──→ resume.py ──→ AI Model │
+│       ↑                            ↓              │
+│  save.py ←── AI Chat + Cowork Skills + MCP       │
+└──────────────────┬───────────────────────────────┘
+                   │ reindex.py
+┌──────────────────▼───────────────────────────────┐
+│               Azure Cloud                         │
+│  Blob Storage (versioned artifacts)               │
+│  AI Search (full-text + semantic, cross-session)  │
+└──────────────────────────────────────────────────┘
 ```
 
-My knowledge was **fragmented** – no shared layer across models.
-
-> **Literature says:** Cloud-based knowledge services improve accessibility and coordination in distributed teams (Gupta et al., 2022; Muralikumar & McDonald, 2025).
-
-### PD3: No Compliance-Ready Documentation
-
-For regulated or research-heavy AI work, I needed:
-- Versioned artifacts with timestamps and sources
-- Traceable decision chains
-- Structured evidence
-
-Chat history is **not an audit trail**.
-
-> **Literature says:** Structured, versioned artifact management and documentation are core best practices for AI governance and regulatory compliance (Winecoff & Bogen, 2024; Lucaj et al., 2025; Cantallops et al., 2021).
+**Key design decisions:** YAML over database (git-diffable, human-readable), Azure as model-agnostic cloud layer, local-first context generation (resume.py costs $0 API), SHA-256 dedup for incremental sync.
 
 ---
 
-## My Solution
+## Daily Workflow
 
-I combined **3 established best practices** from research into one toolkit:
+```
+resume.py → load context → work in AI session → save.py → git commit → reindex.py (optional)
+```
 
-| Problem | Research-Based Solution |
-|---|---|
-| Unstructured Artifacts | Cloud artifact management + structured YAML with metadata |
-| Isolated Knowledge | Azure Cloud as neutral, model-agnostic knowledge layer |
-| No Audit Trail | Git-versioned YAML → traceable, diff-able, timestamped |
+Within each session, Cowork skills provide structured support:
 
-**Bonus:** Context compression reduces full project state (30,000 tokens) to ~600 tokens — aligns with RAG best practices (Liu et al., 2023; Akesson & Santos, 2024).
+```
+Session Start (session-manager S1–S5)
+    → Preflight Check (P1–P6) before each work section
+    → Evidence support: source lookup, consistency checks, review scaffolding
+    → Post-Session Verification (A–F)
+Session End (session-manager E1–E4) → save.py
+```
+
+The human author controls all content decisions. Skills provide context loading, checklists, evidence verification, and quality assurance scaffolding.
 
 ---
 
-## Structured Writing And Review Support Layer
+## Plugins & Skills
 
-Built on top of the core toolkit, I developed a **Cowork plugin** for long-form structured writing and review workflows.
+5 custom-built Cowork plugins with 14 skills total. All `.plugin` files included. Full inventory: [docs/CAPABILITIES.md](docs/CAPABILITIES.md)
 
-**The human author remains responsible for argumentation, wording, and the final text. The plugin provides context loading, evidence support, checklists, and review scaffolding around that process.**
+| Plugin | Version | Skills | Purpose |
+|--------|---------|--------|---------|
+| **thesis-workflow** | 2.3.0 | 7 | Session orchestration, preflight, evidence support, review, consistency |
+| **consensus-plugin** | 0.1.0 | 4 | Academic paper search via Consensus (220M+ papers) |
+| **elicit-research** | 0.1.0 | 1 | Paper search + research reports via Elicit (138M+ papers) |
+| **related-work-comparator** | 0.1.0 | 1 | Structured paper comparison with feature matrix |
+| **zitations-finder** | 0.1.0 | 1 | PDF-based citation lookup + APA-7 formatting |
 
-### Core Capabilities
+### MCP Connectors
 
-- **Session preparation**: dependency loading, chapter context, source scope, and prerequisite checks before work begins.
-- **Drafting and revision support**: paragraph-level evidence support with BELEG/CLAIM/MATCH scaffolding and APA7-oriented checks.
-- **Consistency and review support**: rubric-based review, terminology checks, cross-chapter consistency checks, and red-thread control.
-- **Session closure and traceability**: post-session verification, structured summaries, progress updates, and repository traceability.
+Consensus, Elicit, Zotero, Semantic Scholar — integrated via Model Context Protocol for direct tool access from within AI sessions. Details in [CAPABILITIES.md](docs/CAPABILITIES.md).
 
-### Workflow
+### Source Lookup Chain (priority order)
 
 ```
-Session Start → preparation → drafting support → review/consistency checks → post-session verification → save.py
-```
-
-### lade_manifest: Dependency Management For Focused Context Loading
-
-Each chapter declares its dependencies in `chapter_state.yaml`:
-
-```yaml
-lade_manifest:
-  pflicht:           # Load as FULLTEXT (high priority)
-    - "docs/uni_vorgaben/pruefkatalog.md"
-    - "00_workspace/Fulltext_Kapitel/Kapitel 3 Forschungsdesign.docx"
-  kontext:           # Load chapter_state only (metadata)
-    - "04_anforderungsanalyse_RQ1"
-    - "05_referenzarchitektur_RQ2"
-```
-
-**Universal pflicht files** can be loaded for every work area where fixed reference material must remain in scope.
-
-This system supplements (never replaces) existing checks — all workflow stages read the manifest before execution.
-
----
-
-## Intelligent Save
-
-The practical result: I can say **"speichern"** (or **"save"**) in my AI chat, and Claude automatically:
-
-```mermaid
-flowchart LR
-    U["User: 'speichern'"]
-    A["Detect context\nchapter, type, topic"]
-    Y["Generate\nstructured YAML"]
-    G["Route to\ncorrect folder"]
-    V["Git\nversion + timestamp"]
-    C["Azure\nCloud Sync"]
-
-    U --> A --> Y --> G --> V --> C
-```
-
-This is **not just "save the chat."** It's:
-- **Chat → structured artifact** with ID, status, source reference
-- **Auto-routing** to the correct project folder
-- **Progress tracking** updated automatically
-- **Instantly searchable** via Azure AI Search
-
----
-
-## Architecture & Workflow
-
-```mermaid
-flowchart TB
-    subgraph LOCAL["Local Machine"]
-        direction TB
-        GIT["Git Repository\n(YAML + Markdown)"]
-        CHAT["AI Chat Session\n(Claude, ChatGPT, etc.)"]
-        SKILLS["Cowork Plugin\nSupport Stages"]
-    end
-
-    subgraph AZURE["Azure Cloud"]
-        direction TB
-        BLOB["Blob Storage\nAll artifacts versioned"]
-        SEARCH["AI Search Index\nFull-text + semantic"]
-    end
-
-    subgraph SCRIPTS["CLI Toolkit"]
-        direction TB
-        S1["resume.py\nProgress dashboard + thesis_state.md"]
-        S2["reindex.py\nSync to Azure"]
-        S3["search.py\nCross-session RAG"]
-        S4["save.py\nIntelligent Save"]
-    end
-
-    CHAT -->|"Work in AI session"| GIT
-    SKILLS -->|"Support structured workflow"| CHAT
-    GIT -->|"reindex.py"| BLOB
-    BLOB -->|"auto-index"| SEARCH
-    SEARCH -->|"search.py"| CHAT
-    GIT -->|"resume.py"| CHAT
-    CHAT -->|"'speichern'"| S4
-    S4 -->|"session summary YAML"| GIT
-
-    style LOCAL fill:#f8f9fc,stroke:#1a2744,stroke-width:2px
-    style AZURE fill:#e8f4fd,stroke:#0078D4,stroke-width:2px
-    style SCRIPTS fill:#f0fdf4,stroke:#22c55e,stroke-width:2px
-```
-
-### Workflow Step-by-Step
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant AI as AI Model (any)
-    participant Skills as Support Stages
-    participant Scripts as CLI Scripts
-    participant Azure as Azure Cloud
-
-    Note over User,Azure: START NEW SESSION
-    User->>Scripts: python3 scripts/resume.py
-    Scripts->>Scripts: Parse YAMLs → thesis_state.md + resume_context.txt
-    Scripts-->>User: compact context + lade_manifest dependencies
-    User->>AI: Continue working
-
-    Note over User,Azure: THESIS WORKFLOW SUPPORT
-    User->>Skills: "preflight Kap. 5.4"
-    Skills->>Skills: P0 lade_manifest → P1–P6 checks
-    Skills-->>User: Preflight protocol + checklist
-    User->>Skills: "GO"
-    Skills->>Skills: Paragraph-level guidance + BELEG/CLAIM/MATCH checks
-    Skills-->>User: Drafting support + proof protocol
-
-    Note over User,Azure: INTELLIGENT SAVE
-    User->>AI: "fertig fuer heute"
-    AI->>Skills: Post-session check (A–F)
-    AI->>Scripts: save.py creates summary YAML
-    Scripts->>Scripts: Route to folder + update progress
-    Scripts-->>User: session_summary.yaml saved
-
-    Note over User,Azure: SYNC TO CLOUD
-    User->>Scripts: python3 scripts/reindex.py --azure --blob
-    Scripts->>Azure: Upload to Blob + Index in AI Search
-
-    Note over User,Azure: CROSS-SESSION SEARCH
-    User->>Scripts: python3 scripts/search.py "my question"
-    Scripts->>Azure: Semantic search across ALL sessions
-    Azure-->>Scripts: Top-8 relevant artifacts
-    Scripts->>AI: RAG analysis
-    AI-->>User: Grounded answer with sources
+zitations-finder → Zotero MCP → Elicit → Semantic Scholar → Consensus
 ```
 
 ---
 
-## Quick Start
+## Scripts
 
-### 1. Clone & Install
+| Script | Purpose |
+|--------|---------|
+| `save.py` | End-of-session: generates structured YAML summary, auto-routes to correct folder, optional blob sync |
+| `resume.py` | Session start: parses all chapter states into compact context (~600 tokens vs. ~30k full load) |
+| `reindex.py` | Syncs artifacts to Azure Blob + AI Search (SHA-256 dedup) |
+| `search.py` | Cross-session RAG queries via Azure AI Search + Claude |
+| `workflow_lib.py` | Shared logic, lade_manifest support, path resolution |
 
-```bash
-git clone https://github.com/MustDemir/ai-context-vault.git
-cd ai-context-vault
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your Azure credentials
-```
-
-### 2. Setup Azure Resources
-
-```bash
-python3 scripts/create_index.py
-```
-
-<details>
-<summary>Azure Setup Guide (click to expand)</summary>
-
-**What you need:**
-- Azure account (free tier works!)
-- Storage Account (Blob Storage)
-- Azure AI Search service (free tier: 50MB, 3 indexes)
-
-**Steps:**
-1. Create a Storage Account → note the name + key
-2. Create an Azure AI Search service → note the endpoint + key
-3. Copy `.env.example` to `.env` and fill in credentials
-4. Run `python3 scripts/create_index.py` to create the search index
-
-</details>
-
-### 3. Daily Workflow
-
-```bash
-# INTELLIGENT SAVE (primary)
-python3 scripts/save.py --input session_notes.txt --source chatgpt --topic auto
-
-# Optional Blob sync
-python3 scripts/save.py --input session_notes.txt --topic auto --blob
-
-# Resume a session (generates thesis_state.md + resume_context.txt)
-python3 scripts/resume.py
-
-# Sync all artifacts to Azure
-python3 scripts/reindex.py --azure --blob
-
-# Search across all sessions
-python3 scripts/search.py "what are the compliance requirements?"
-```
-
-### 4. Install Support Plugin (optional, for Cowork/Claude Desktop)
-
-```bash
-# The plugin file is in plugins/
-# Install via Cowork: drag plugins/thesis-workflow.plugin into Cowork
-```
+Supporting scripts: `create_index.py`, `validate_structure.py`, `weekly_audit.py`, `weekly_branch_drift.py`, `update_progress.py`, `workflow_smoke.py`
 
 ---
 
-## Token Efficiency
+## Context Efficiency
 
-While modern AI models support large context windows, reloading full project contexts per session is inefficient:
+| Approach | Tokens/Session | 10 Sessions |
+|----------|---------------:|------------:|
+| Full project context | ~30,000 | 300,000 |
+| resume.py (structured) | ~600 | 6,000 |
+| + lade_manifest (focused) | ~400 | 4,000 |
 
-| Approach | Tokens per Session | 10 Sessions | Cost (Claude) |
-|---|---:|---:|---:|
-| Load full project context | ~30,000 | 300,000 | ~$4.50 |
-| Re-explain everything | ~15,000 | 150,000 | ~$2.25 |
-| **resume.py** (structured) | **~600** | **6,000** | **~$0.09** |
-| **+ lade_manifest** (focused) | **~400** | **4,000** | **~$0.06** |
-
-Savings matter at scale — and align with RAG optimization research (Liu et al., 2023; Jin et al., 2024).
+`lade_manifest` is a per-chapter dependency declaration in `chapter_state.yaml`: `pflicht` (load as fulltext) and `kontext` (metadata only). This keeps context windows focused without losing cross-chapter awareness.
 
 ---
 
@@ -317,185 +114,65 @@ Savings matter at scale — and align with RAG optimization research (Liu et al.
 
 ```
 ai-context-vault/
-├── scripts/
-│   ├── save.py             # Primary end-of-session summary save (3-tier LLM fallback)
-│   ├── workflow_lib.py     # Shared save/reindex/resume logic + lade_manifest support
-│   ├── resume.py           # Compact resume context + generated docs/thesis_state.md
-│   ├── reindex.py          # Sync summaries to Azure (Blob + Search) with SHA-256 dedup
-│   ├── search.py           # Cross-session RAG query (Azure AI Search + Claude)
-│   ├── extract_yamls.py    # Legacy/manual YAML extraction from chat exports
-│   ├── create_index.py     # Azure Search index setup
-│   ├── validate_structure.py  # CI structure validation
-│   ├── update_progress.py  # README progress bar generation
-│   ├── weekly_audit.py     # Weekly GitHub Issue audit (structure, stale files)
-│   ├── weekly_branch_drift.py  # Branch drift snapshot
-│   ├── workflow_smoke.py   # Local workflow smoke tests
-│   └── generate_diagrams.py   # Diagram generation helpers
-├── skills/                    # Workflow skill definitions and references
-│   └── SKILL_OVERVIEW.md      # Architecture + changelog (v2.1)
-├── plugins/
-│   └── thesis-workflow.plugin     # Installable Cowork plugin (ZIP)
-├── legacy/                    # Archived plugin/scripts snapshots from older workflow versions
+├── scripts/           CLI toolkit (save, resume, reindex, search, CI)
+├── skills/            7 skill source definitions (thesis-workflow v2.3.0)
+│   └── SKILL_OVERVIEW.md
+├── plugins/           Distributable .plugin files (ZIP)
+│   ├── thesis-workflow.plugin
+│   ├── consensus-plugin.plugin
+│   ├── elicit-research.plugin
+│   ├── related-work-comparator.plugin
+│   └── zitations-finder.plugin
+├── templates/         Starter-Kit for new projects
+│   ├── admin/         SOURCE_OF_TRUTH, WORKFLOW_PLAYBOOK, gliederung, asset_naming
+│   ├── docs/          roter_faden_tracker, pruefkatalog, WORKFLOW_OUTPUT_SCHEMA
+│   └── chapter/       chapter_state.yaml template, project_scaffold guide
 ├── docs/
-│   ├── ARCHITECTURE.md        # Design decisions
-│   ├── ACADEMIC_VALIDATION.md # Research backing
-│   └── session_summaries/     # Toolkit session summaries
-├── examples/
-│   ├── session_summaries/     # Example summary artifacts
-│   └── yaml_templates/        # YAML templates (requirements, gates, chapter_state)
-├── .memory/                   # Generated local index + resume context (gitignored)
-├── .github/workflows/         # CI: validate-structure, weekly-audit, update-progress
-├── .env.example
-├── requirements.txt
-├── LICENSE
-└── README.md
+│   ├── CAPABILITIES.md        Full plugin/skill/MCP inventory
+│   ├── ARCHITECTURE.md        Design decisions
+│   ├── ACADEMIC_VALIDATION.md Research backing
+│   └── diagrams/              Technical overview diagrams
+├── examples/          YAML templates and sample artifacts
+├── legacy/            Archived older versions
+├── .github/workflows/ CI: structure validation, weekly audit
+└── .memory/           Local cache (gitignored)
 ```
 
 ---
 
-## How Each Script Works
+## Quick Start
 
-### `save.py` – Intelligent Save
+```bash
+git clone https://github.com/MustDemir/ai-context-vault.git
+cd ai-context-vault
+pip install -r requirements.txt
+cp .env.example .env   # Add Azure credentials
 
-```
-Input:  Short session notes (--input/--text/stdin)
-Output: Compact YAML summary routed to the right folder
-
-Pipeline:
-1. Detect topic             → architecture/requirements/evaluation/general
-2. Build summary bullets    → decisions + next steps
-3. LLM summary (3-tier):   Claude → Azure OpenAI → local rules
-4. Save YAML artifact       → session_summaries/*
-5. Update chapter_state     → progress, done, next_steps
-6. Optional Blob sync       → explicit --blob or SAVE_AUTO_BLOB_SYNC=1
+# Daily use
+python3 scripts/resume.py                           # Load context
+python3 scripts/save.py --input notes.txt --topic auto  # Save session
+python3 scripts/reindex.py --azure --blob           # Sync to cloud
+python3 scripts/search.py "query across all sessions"   # RAG search
 ```
 
-### `resume.py` – Context Loader + SSOT Generator
-
-```
-Input:  All chapter_state.yaml + session summaries
-Output: .memory/resume_context.txt (cache) + docs/thesis_state.md (generated SSOT snapshot)
-
-thesis_state.md contains:
-- Kapitelstatus with progress
-- lade_manifest dependency matrix (all chapters)
-- Decisions aggregated (ID + chapter + rationale)
-- Critical Definitions (cross-chapter binding)
-- Requirements (RQ1) + Quality Gates (RQ2)
-- Latest session summaries per topic
-```
-
-### `reindex.py` – Azure Cloud Sync
-
-```
-Input:  Local session summaries + input files
-Output: Updated Blob + AI Search index
-
-Features:
-- SHA-256 change detection (skip unchanged)
-- Input file sync (--input-blob)
-- Schema-aware Azure Search push
-```
-
-### `search.py` – Cross-Session RAG
-
-```
-Input:  Natural language question
-Output: Grounded answer from indexed summaries
-
-Pipeline:
-1. Azure AI Search (Top-8, repo-scoped)
-2. Assemble context from retrieved artifacts
-3. Send to Claude API with references
-4. Return answer with [1], [2] citations
-```
+**Plugin installation:** Drag `.plugin` files from `plugins/` into Claude.ai Cowork.
 
 ---
 
 ## Cross-Model Compatibility
 
-This toolkit is **model-agnostic by design**. Azure Cloud is the neutral knowledge layer:
+The toolkit is model-agnostic. Azure Cloud serves as neutral storage layer — artifacts are accessible from Claude, ChatGPT, Gemini, or any other model via `resume.py` output. No vendor lock-in.
 
-| Model | How to Use |
-|---|---|
-| **Claude** | Paste `resume.py` output → continue |
-| **ChatGPT** | Paste `resume.py` output → continue |
-| **Gemini** | Paste `resume.py` output → continue |
-| **Local LLMs** | Paste `resume.py` output → continue |
-| **Any future model** | Paste `resume.py` output → continue |
-
-Unlike Claude Projects (Claude-only) or ChatGPT Memory (ChatGPT-only), your artifacts live in **your** Azure subscription — independent of any vendor.
+Cowork plugins and MCP connectors are Claude-specific. The underlying data (YAML, Markdown, git history) remains portable.
 
 ---
-
-## Academic Backing
-
-This toolkit combines **3 established best practices from peer-reviewed research**:
-
-1. **Cloud Artifact Management** → Improves collaboration in distributed teams
-2. **Structured Documentation** → Core best practice for AI governance and compliance
-3. **Context Reuse + RAG** → Established optimization direction
-
-**See [docs/ACADEMIC_VALIDATION.md](docs/ACADEMIC_VALIDATION.md) for complete research backing and citations.**
-
-The specific combination (Azure + RAG + CLI + YAML) is an **engineering pattern** based on established principles — not yet a formalized standard, but aligned with research recommendations for production-ready RAG systems.
-
----
-
-## Azure Architecture
-
-```
-┌──────────────────────────────────────────────────┐
-│                  Azure Cloud                      │
-│        (neutral, model-agnostic layer)            │
-│                                                   │
-│  ┌───────────────────┐  ┌──────────────────────┐ │
-│  │  Blob Storage      │  │  AI Search           │ │
-│  │  ─────────────     │  │  ─────────           │ │
-│  │  YAML artifacts    │──│  Full-text search    │ │
-│  │  MD docs           │  │  Semantic ranking    │ │
-│  │  Evidence chain    │  │  Cross-session       │ │
-│  └───────────────────┘  └──────────────────────┘ │
-│         ↑                        ↓                │
-│     reindex.py               search.py            │
-└──────────────────────────────────────────────────┘
-         ↑                        ↓
-┌──────────────────────────────────────────────────┐
-│               Local Machine                       │
-│                                                   │
-│  Git repo ──→ resume.py ──→ Any AI model          │
-│       ↑                            ↓              │
-│  "speichern" ←── AI Chat + Support Stages         │
-└──────────────────────────────────────────────────┘
-```
-
----
-
-## Use Cases
-
-- **Long-Form Writing Projects** – Track requirements, gates, progress, and review steps across structured work packages
-- **Intelligent Save** – `save.py` creates compact summary YAML, routes it, and syncs
-- **Multi-Model Projects** – Shared knowledge base across Claude, ChatGPT, Gemini via Azure
-- **Compliance Documentation** – Git-versioned evidence chain (EU AI Act, ISO 42001)
-- **Cross-Session Search** – RAG across ALL your work, not just current project
-- **Knowledge-Intensive Projects** – Structured artifact management at scale
-
----
-
-## Contributing
-
-Contributions welcome! Please open an issue or pull request.
 
 ## License
 
-MIT License – see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE)
 
 ## Author
 
-**Mustafa Demir** – SRH Fernhochschule, M.Sc. Digital Management & Transformation
+**Mustafa Demir** — SRH Fernhochschule, M.Sc. Digital Management & Transformation
 
 [![GitHub](https://img.shields.io/badge/GitHub-MustDemir-181717?style=flat&logo=github)](https://github.com/MustDemir)
-
----
-
-*Built with Azure, Claude API, Python, and Cowork. I recognized a recurring problem in AI-assisted work, mapped it to established best practices, and implemented a reusable toolkit for structured context management and cross-session continuity.*

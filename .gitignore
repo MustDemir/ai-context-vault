@@ -42,3 +42,6 @@ session_notes.txt
 skills/thesis-writing-support/
 *write*
 *Write*
+
+# Excluded plugins (local only)
+plugins/zitations-finder.plugin
