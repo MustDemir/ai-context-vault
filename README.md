@@ -70,7 +70,6 @@ The human author controls all content decisions. Skills provide context loading,
 | **consensus-plugin** | 0.1.0 | 4 | Academic paper search via Consensus (220M+ papers) |
 | **elicit-research** | 0.1.0 | 1 | Paper search + research reports via Elicit (138M+ papers) |
 | **related-work-comparator** | 0.1.0 | 1 | Structured paper comparison with feature matrix |
-| **zitations-finder** | 0.1.0 | 1 | PDF-based citation lookup + APA-7 formatting |
 
 ### MCP Connectors
 
